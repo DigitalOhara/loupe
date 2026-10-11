@@ -26,7 +26,7 @@ Loupe speaks the ADB protocol straight from the page, so a live screen mirror, a
 - Two-pane workspace. Drag tabs between two panes, resize them, and keep one panel open while you work in another.
 - Root-aware. On a rooted device Loupe reaches protected paths, other processes and non-debuggable heap dumps.
 
-When Android blocks an install, Loupe asks before overriding it. For Play Protect, **Install anyway** turns off Play Protect scanning for installs over adb until you turn it back on.
+When Android blocks an install, Loupe asks before overriding it. For Play Protect, **Install Anyway** turns off Play Protect scanning for installs over adb until you turn it back on.
 
 ### Decompiler
 
@@ -34,7 +34,7 @@ When Android blocks an install, Loupe asks before overriding it. For Play Protec
 
 - Open an APK from disk (drop several at once) or pull an installed app from the phone.
 - Read the app. Decompiled Java, the decoded manifest and resources, search across code, resources and names, and deobfuscation options.
-- Decompiled apps. A table of every app you have opened, with version, SDK range, size, when it was decompiled and when it was last analyzed. Reopen, **Analyze**, view results or delete from the row.
+- Decompiled Apps. A table of every app you have opened, with version, SDK range, size, when it was decompiled and when it was last analyzed. Reopen, **Analyze**, view results or delete from the row.
 - APK info and signature. Manifest facts and a v1 through v3.1 signature check.
 - One-click setup. The first time, Loupe asks before downloading a private Java runtime and jadx (about 140 MB, checksum-pinned) into `~/.loupe/tools`. jadx runs in an OS sandbox on macOS and Linux. Windows has no usable sandbox, so the decompiler is off there (see [Windows](#windows)).
 
@@ -80,7 +80,7 @@ On Linux the decompiler needs `bubblewrap` (`sudo apt install bubblewrap`). macO
 
 ### Connecting a device
 
-**Over USB.** Turn on USB debugging, plug the phone in, and stop any desktop adb server first (`adb kill-server`), since it holds the USB interface. Then pick **Connect a device over USB** in the device menu and tap **Allow USB debugging** on the phone.
+**Over USB.** Turn on USB debugging, plug the phone in, and stop any desktop adb server first (`adb kill-server`), since it holds the USB interface. Then pick **Connect over USB** in the device menu and tap **Allow USB debugging** on the phone.
 
 **Over Wi-Fi.** Pick **Connect over Wi-Fi**. Pair with a code or QR the first time, or type an `address:port` if the phone is already paired.
 
@@ -93,7 +93,7 @@ sudo apt install bubblewrap xz-utils openssl android-tools-adb
 npm install && npm run dev
 ```
 
-USB mirroring still works because WebUSB runs in Windows Chrome. For Wi-Fi, Ubuntu's `adb` has no mDNS, so use the **Pair code** and **Connect** tabs with the `ip:port` from the phone's Wireless debugging screen.
+USB mirroring still works because WebUSB runs in Windows Chrome. For Wi-Fi, Ubuntu's `adb` has no mDNS, so use the **Pair Code** and **Connect** tabs with the `ip:port` from the phone's Wireless debugging screen.
 
 ## Built with
 

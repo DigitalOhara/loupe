@@ -46,7 +46,7 @@ The page only calls same-origin `/__loupe/*`, and `/__loupe/session` refuses cro
    ```bash
    adb kill-server
    ```
-3. Device menu → Connect a device over USB, pick the phone, and tap Allow USB debugging on it (tick Always allow).
+3. Device menu → Connect over USB, pick the phone, and tap Allow USB debugging on it (tick Always allow).
 
 The connect sequence prints a trace into the Shell panel (`opening USB picker…`, `claiming interface…`, `authenticating…`, `reading device info…`, `connected`). On timeout, `rx=0` means the phone never replied (usually another adb owns it), and `rx: CNXN,AUTH…` means it replied but authorisation did not finish.
 
@@ -56,17 +56,17 @@ Device menu → Connect over Wi-Fi:
 
 | Tab | Use when |
 |---|---|
-| Pair code | First time. The phone shows an address and a 6-digit code under Wireless debugging → Pair device with pairing code. |
-| QR code | First time, hands-free. Scan Loupe's QR from Pair device with QR code. |
+| Pair Code | First time. The phone shows an address and a 6-digit code under Wireless debugging → Pair device with pairing code. |
+| QR Code | First time, hands-free. Scan Loupe's QR from Pair device with QR code. |
 | Connect | Already paired. Type `192.168.1.42:5555`. |
 
 A browser cannot open TCP sockets, do mDNS or perform the TLS/SPAKE2 handshake Android 11+ requires. The bridge (`proxy/adb-bridge.js`) drives the host `adb`, which pairs correctly, and relays each ADB service (`shell:`, `sync:`, `localabstract:scrcpy` and so on) to the browser over a WebSocket. The browser runs ya-webadb's `AdbTransport` against that relay, so shell, files, logcat, mirroring and memory work the same as over USB. QR pairing follows Android Studio's path: the QR carries a service name and password, the phone advertises `_adb-tls-pairing._tcp` once scanned, and Loupe finds it with `adb mdns services`.
 
-The host adb server claims USB devices, so USB and Wi-Fi cannot both be live. The Wi-Fi panel has Stop adb server (free USB) to hand USB back. The bridge uses `~/Library/Android/sdk/platform-tools/adb` when present and otherwise `adb` from `PATH`.
+The host adb server claims USB devices, so USB and Wi-Fi cannot both be live. The Wi-Fi panel has Stop adb Server (Free USB) to hand USB back. The bridge uses `~/Library/Android/sdk/platform-tools/adb` when present and otherwise `adb` from `PATH`.
 
 ### Disconnecting and rebooting
 
-Disconnect (device bar, or the device's row in the device menu) asks first, stops mirroring, tears down the logcat and shell streams, closes the transport and clears every panel's state. Over Wi-Fi it leaves the host adb attached, so the device stays listed under Wireless devices for a one-click re-attach. The header's Reboot menu runs `reboot`, `reboot recovery` or `reboot bootloader`, and Loupe resets the UI as it does for a disconnect.
+Disconnect (device bar, or the device's row in the device menu) asks first, stops mirroring, tears down the logcat and shell streams, closes the transport and clears every panel's state. Over Wi-Fi it leaves the host adb attached, so the device stays listed under Wireless Devices for a one-click re-attach. The header's Reboot menu runs `reboot`, `reboot recovery` or `reboot bootloader`, and Loupe resets the UI as it does for a disconnect.
 
 ## Console features
 
@@ -90,7 +90,7 @@ Screenshots save a PNG and try to copy it (the copy can fail on browser permissi
 
 ### Memory
 
-Pick a process (sorted by RSS) to load its `dumpsys meminfo`, view `/proc/<pid>/maps`, and capture memory to your computer. Capture tries `am dumpheap` for an `.hprof` and falls back to an ELF core dump. Force core dump skips the hprof attempt: it reads the process's readable memory from `/proc/<pid>/mem` and packages it with each region as a `PT_LOAD` at its real address and permissions, plus an `NT_FILE` note naming the backing libraries. Regions the kernel refuses are skipped, which keeps later offsets in place. The core opens in gdb, LLDB, radare2 or Ghidra.
+Pick a process (sorted by RSS) to load its `dumpsys meminfo`, view `/proc/<pid>/maps`, and capture memory to your computer. Capture tries `am dumpheap` for an `.hprof` and falls back to an ELF core dump. Force Core Dump skips the hprof attempt: it reads the process's readable memory from `/proc/<pid>/mem` and packages it with each region as a `PT_LOAD` at its real address and permissions, plus an `NT_FILE` note naming the backing libraries. Regions the kernel refuses are skipped, which keeps later offsets in place. The core opens in gdb, LLDB, radare2 or Ghidra.
 
 `am dumpheap` hands the target app a file descriptor and the app writes the file, so it works only on debuggable builds. For a release app it accepts the request and the VM writes nothing. Loupe checks the package's `DEBUGGABLE` flag first and goes straight to the core path when it is off. It captures stderr (the ADB `exec:` service carries stdout only), waits up to three minutes for a growing file, tries the app's data dir, `/data/local/tmp` and `/sdcard`, and tries both the pid and the process name. With root, `/proc/<pid>/mem` needs no cooperation, so capture works on every process and only the format changes.
 
@@ -112,8 +112,8 @@ Lists user, system or all packages, with a launcher icon and a name. The name co
 
 Install APK pushes the file, runs `pm install -r` and cleans up. Two Android blocks get an in-app prompt (`Dialogs.jsx`):
 
-- **Play Protect hold.** `pm install` waits on Play Protect's dialog and returns no error. `installApk` polls the focused window, and on `PlayProtectDialogsActivity` it asks. Install anyway sets `verifier_verify_adb_installs=0`, stops the waiting `pm` and installs again. Cancel install stops it and sends the phone HOME. The setting stays at 0 until you set it back to 1 (Settings tab, `global`).
-- **Old target SDK.** Android 14+ can refuse an old app (`INSTALL_FAILED_DEPRECATED_SDK_VERSION`). Install anyway retries with `--bypass-low-target-sdk-block`.
+- **Play Protect hold.** `pm install` waits on Play Protect's dialog and returns no error. `installApk` polls the focused window, and on `PlayProtectDialogsActivity` it asks. Install Anyway sets `verifier_verify_adb_installs=0`, stops the waiting `pm` and installs again. Cancel Install stops it and sends the phone HOME. The setting stays at 0 until you set it back to 1 (Settings tab, `global`).
+- **Old target SDK.** Android 14+ can refuse an old app (`INSTALL_FAILED_DEPRECATED_SDK_VERSION`). Install Anyway retries with `--bypass-low-target-sdk-block`.
 
 Per-app actions: launch, force-stop, enable/disable, clear data (`pm clear`), clear cache (root-only `rm -rf` of the cache dirs), uninstall, and jump to the data dir in Files.
 
@@ -125,7 +125,7 @@ Processes is the `ps -A` table (sortable, filterable) with force-stop and kill. 
 
 Loupe points the device at your intercepting proxy (Burp, HTTP Toolkit). It is not the proxy itself.
 
-- **Device proxy:** Start/Stop sets and clears `settings put global http_proxy <host>:<port>` and reads it back, so the status reflects the device. Test connection is a TCP connect from the bridge (`/__loupe/proxy/test`), so it shows only that this computer reaches the proxy. The host defaults to this machine's LAN address. The proxy must listen on all interfaces.
+- **Device proxy:** Start/Stop sets and clears `settings put global http_proxy <host>:<port>` and reads it back, so the status reflects the device. Test Connection is a TCP connect from the bridge (`/__loupe/proxy/test`), so it shows only that this computer reaches the proxy. The host defaults to this machine's LAN address. The proxy must listen on all interfaces.
 - **CA certificate:** upload DER or PEM. The host's openssl converts it to PEM with the Android `subject_hash_old` name (`/__loupe/cert/prepare`, `proxy/cert.js`). On Magisk or KernelSU (`/data/adb/modules` present), `installCert` writes a boot module (`loupe-cacerts`) whose `post-fs-data.sh` re-applies the store over `/system/etc/security/cacerts` and the Conscrypt APEX on every boot, and runs once at install. Without a module manager it does a one-shot tmpfs mount that resets on reboot. Both need root. Remove deletes the module and unmounts the live store.
 
 ### Frida
@@ -164,7 +164,7 @@ The first time, Loupe asks once before downloading a Java runtime (Temurin 21) a
 
 ### What you get
 
-- **Dashboard.** With no project open: a drop box above a Decompiled apps table (search, sort, app icon and name, package, version, SDK range, MD5, size, relative scan time with the exact time on hover, and when it was last analyzed). Click a row to reopen it. Copy icons copy the package or MD5, and the trash icon deletes the cache entry. `‹ Apps` returns here. Facts come from `manifestFacts` in `proxy/jadx.js`. The MD5 is computed at upload and filled in for older scans when the table loads.
+- **Dashboard.** With no project open: a drop box above a Decompiled Apps table (search, sort, app icon and name, package, version, SDK range, MD5, size, relative scan time with the exact time on hover, and when it was last analyzed). Click a row to reopen it. Copy icons copy the package or MD5, and the trash icon deletes the cache entry. `‹ Apps` returns here. Facts come from `manifestFacts` in `proxy/jadx.js`. The MD5 is computed at upload and filled in for older scans when the table loads.
 - **Source tree** with single-child packages folded, file-type icons, a filter box (it matches what is already loaded) and document tabs.
 - **Search** over code, resources and the manifest (regex, case, whole word), `Ctrl/Cmd+Shift+F`. Clicking a hit jumps to it.
 - **Deobf:** jadx's deobfuscator with min and max name length and the use-source-name option. Each combination is cached as its own decompile.
@@ -298,11 +298,11 @@ ya-webadb needs one shared copy of its `@yume-chan/*` packages, and mismatched c
 | `403 forbidden` from the bridge, or Wi-Fi sees no devices | The API is loopback-only and origin-checked. Another machine is refused by design, and another UI port needs adding to `ALLOWED_ORIGINS`. |
 | USB connect stalls at `authenticating…` | Accept Allow USB debugging on the phone. No prompt? Revoke USB debugging authorisations, replug and retry. |
 | USB connect fails claiming the interface | A desktop adb server owns the device. Run `adb kill-server` and replug. |
-| USB stopped working after Wi-Fi | The adb server claimed it. Press Stop adb server (free USB), then reconnect. |
+| USB stopped working after Wi-Fi | The adb server claimed it. Press Stop adb Server (Free USB), then reconnect. |
 | Switching phones, or USB to Wi-Fi | Press Disconnect first. Only one transport is live, and disconnecting clears the old device's panel state. |
 | Wi-Fi tab does nothing | Needs `adb` on `PATH` and the bridge running (`npm run dev`). |
 | Paired but the device will not connect | Pairing and connect use different ports. Loupe finds the connect port with `adb mdns services`. If mDNS is blocked, use the Connect tab with `<ip>:5555`. |
-| Wi-Fi pairing or discovery fails in WSL2 | Ubuntu's apt `adb` (34.0.4) has no mDNS, so QR pairing and port discovery find nothing. Use Pair code, then Connect with the `ip:port` from Wireless debugging. With mirrored networking `adb start-server` hangs, so on Linux Loupe starts `adb -L tcp:5037 server nodaemon` itself. USB runs in Windows Chrome and never touches WSL. |
+| Wi-Fi pairing or discovery fails in WSL2 | Ubuntu's apt `adb` (34.0.4) has no mDNS, so QR pairing and port discovery find nothing. Use Pair Code, then Connect with the `ip:port` from Wireless debugging. With mirrored networking `adb start-server` hangs, so on Linux Loupe starts `adb -L tcp:5037 server nodaemon` itself. USB runs in Windows Chrome and never touches WSL. |
 | Mirror will not start | Needs WebCodecs H.264. The Shell shows which step failed. |
 | `/data/data` unreadable on a rooted phone | Check the header reads `# root`. If `su` prompts on the device, grant it in your superuser app, then toggle. |
 | Capture produced a `.core`, not `.hprof` | Expected on release builds. Open the core in gdb, radare2 or Ghidra. |
@@ -311,9 +311,9 @@ ya-webadb needs one shared copy of its `@yume-chan/*` packages, and mismatched c
 | CA install fails, or HTTPS will not decrypt | The system-store install needs root, and without Magisk or KernelSU it resets on reboot. Pinned apps need unpinning. |
 | Frida install fails with an `xz` error | Install `xz` on the host. |
 | CA step fails with an `openssl` error | Install `openssl` or put it on `PATH`. |
-| Frida spawn hangs, or the app dies on attach | The server release differs from Loupe's client. Press Reinstall matching server. |
-| Install stops with a Play Protect dialog on the phone | Use Install anyway in Loupe's prompt, or answer on the phone. See Apps. |
+| Frida spawn hangs, or the app dies on attach | The server release differs from Loupe's client. Press Reinstall Matching Server. |
+| Install stops with a Play Protect dialog on the phone | Use Install Anyway in Loupe's prompt, or answer on the phone. See Apps. |
 | Decompiler is unavailable | Windows has no sandbox, or the Linux self-test failed (the panel shows why; `bwrap` and user namespaces are required). Under WSL2, open Loupe from Windows Chrome. |
 | jadx ran out of memory | Raise the heap with `LOUPE_JADX_XMX_MB`. The default is half of RAM, up to 8 GB. |
 | `Full decompile needs LOUPE_HOME without spaces` | Point `LOUPE_HOME` at a path with no spaces. |
-| Decompile fails with `timed out` or the output cap | Jobs stop at 30 minutes or 4 GiB of output. The cache holds 10 GiB, and Decompiled apps can delete entries. |
+| Decompile fails with `timed out` or the output cap | Jobs stop at 30 minutes or 4 GiB of output. The cache holds 10 GiB, and Decompiled Apps can delete entries. |
