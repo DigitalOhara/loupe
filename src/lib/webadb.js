@@ -148,7 +148,7 @@ export async function run(cmd) {
  * Streams stdout of a long-running command (e.g. logcat) line by line.
  * Returns a stop function that kills the process.
  */
-export async function streamLines(cmd, onLine) {
+export async function streamLines(cmd, onLine, onEnd = null) {
   if (!current) throw new Error('No device connected.');
   const proc = await shellSpawner(current.adb).spawn(cmd);
   const reader = proc.output.pipeThrough(new TextDecoderStream()).getReader();
@@ -168,6 +168,7 @@ export async function streamLines(cmd, onLine) {
     } catch {
       /* reader torn down on stop */
     }
+    if (!stopped) onEnd?.();                       // the command ended by itself (device gone, process killed)
   })();
 
   return () => {

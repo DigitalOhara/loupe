@@ -7,7 +7,6 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { openZip, readEntry } from './zipfile.js';
-import crypto from 'node:crypto';
 import * as toolchain from './toolchain.js';
 import { runVerify } from './jadx.js';
 import { extractTarGz } from './tar.js';

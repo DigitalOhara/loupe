@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { EmptyState, Mini, Split } from '../ui.jsx';
 
@@ -31,7 +31,7 @@ export function Proxy() {
       <div className="scroll" style={{ minWidth: 0, padding: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <section>
         <div style={head}>
-          <span>Device proxy</span>
+          <span>Device Proxy</span>
           <span className="mono" style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 7, fontSize: 10,
             textTransform: 'none', letterSpacing: 0, flex: '0 0 auto',
@@ -56,10 +56,10 @@ export function Proxy() {
           <input className="mono" value={s.devProxyPort} onChange={(e) => set({ devProxyPort: e.target.value })}
             placeholder="port" style={{ ...input, width: 74 }} />
           {s.devProxyLive
-            ? <Mini tone="danger" label="Stop proxy" onClick={clearDeviceProxy} />
-            : <Mini tone="accent" label="Start proxy" onClick={setDeviceProxy} />}
+            ? <Mini tone="danger" label="Stop Proxy" onClick={clearDeviceProxy} />
+            : <Mini tone="accent" label="Start Proxy" onClick={setDeviceProxy} />}
           <div className="spacer" />
-          <Mini label="Test connection" onClick={testProxy} />
+          <Mini label="Test Connection" onClick={testProxy} />
           <Mini label="Refresh" onClick={refreshDeviceProxy} />
         </div>
         <p className="mono" style={hint}>
@@ -70,14 +70,14 @@ export function Proxy() {
 
       <section>
         <div style={head}>
-          <span>CA certificate</span>
+          <span>CA Certificate</span>
           <span className="mono" style={{ ...badge, color: s.certInstalled ? 'var(--ok)' : 'var(--ink3)' }}>
             {s.certInstalled === true ? 'installed ✓' : s.certInstalled === false ? 'not installed' : ''}
           </span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <Mini tone="accent" disabled={s.certBusy || !s.rootAvailable}
-            label={s.certBusy ? 'Installing…' : (s.certName ? `Reinstall ${s.certName}` : 'Install CA cert (.der / .pem)')}
+            label={s.certBusy ? 'Installing…' : (s.certName ? `Reinstall ${s.certName}` : 'Install CA Cert (.der / .pem)')}
             onClick={() => certRef.current?.click()} />
           <input ref={certRef} type="file" hidden accept=".der,.pem,.crt,.cer,application/x-x509-ca-cert"
             onChange={(e) => { installCert(e.target.files?.[0]); e.target.value = ''; }} />

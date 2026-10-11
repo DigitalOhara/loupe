@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLoupe } from '../../store.jsx';
 
 const LINE_COLOR = { cmd: 'var(--accent)', dim: 'var(--ink3)' };
@@ -37,7 +37,7 @@ export function Shell() {
         padding: '8px 11px', borderTop: '1px solid var(--line)', background: 'var(--bg2)'
       }}>
         <span className="mono" style={{ fontSize: 11.5, color: 'var(--accent)' }}
-          title={s.rootMode ? 'Root shell (su)' : 'Unprivileged shell'}>
+          title={s.rootMode ? 'Root Shell (su)' : 'Unprivileged Shell'}>
           {s.rootMode ? '#' : '$'}
         </span>
         <input className="mono" value={s.shellIn} onKeyDown={onKeyDown}

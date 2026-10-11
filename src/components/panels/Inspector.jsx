@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLoupe } from '../../store.jsx';
 import { EmptyState, Split } from '../ui.jsx';
 
@@ -27,7 +26,7 @@ export function Inspector() {
     <>
       <div className="panel-toolbar">
         <button className="btn-quiet" onClick={loadHierarchy} disabled={s.insBusy}>
-          {s.insBusy ? 'Dumping…' : 'Dump hierarchy'}
+          {s.insBusy ? 'Dumping…' : 'Dump Hierarchy'}
         </button>
         <span className="mono" style={{ fontSize: 10, color: 'var(--ink3)' }}>
           uiautomator dump · {s.nodes.length} nodes
@@ -35,7 +34,7 @@ export function Inspector() {
       </div>
 
       {s.nodes.length === 0 ? (
-        <EmptyState>No hierarchy yet: press <span style={{ color: 'var(--ink2)' }}>Dump hierarchy</span>.</EmptyState>
+        <EmptyState>No hierarchy yet: press <span style={{ color: 'var(--ink2)' }}>Dump Hierarchy</span>.</EmptyState>
       ) : (
         <Split id="inspector">
           <div className="scroll mono" style={{ padding: '6px 0', fontSize: 11 }}>

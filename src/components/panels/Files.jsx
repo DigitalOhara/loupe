@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { Chip, Mini, Search, EmptyState, Split } from '../ui.jsx';
 
@@ -180,7 +180,7 @@ export function Files() {
         <Mini label={s.findBusy ? 'Searching…' : 'Search ⏎'} disabled={s.findBusy || !s.fileQ.trim()}
           onClick={() => searchFiles(s.fileQ)} />
         <div className="spacer" style={{ minWidth: 8 }} />
-        <Mini label="New folder" onClick={() => {
+        <Mini label="New Folder" onClick={() => {
           const name = window.prompt('New folder name');
           if (name) newFolder(name.trim());
         }} />
@@ -195,7 +195,7 @@ export function Files() {
           entry on the right. Pairing them means the path you're acting on and
           the destructive buttons are read in one glance. */}
       <div className="panel-toolbar" style={{ borderTop: 'none' }}>
-        <Mini label="↑ up" onClick={up} />
+        <Mini label="↑ Up" onClick={up} />
         {crumbs.map((c, i) => (
           <Chip key={c.p} on={i === crumbs.length - 1} className="crumb" onClick={() => loadFiles(c.p)}>
             {c.label}
@@ -230,7 +230,7 @@ export function Files() {
             <div className="panel-foot" style={{ borderBottom: '1px solid var(--line)', borderTop: 'none' }}>
               <span>{results.length} result{results.length === 1 ? '' : 's'} under {s.findRoot}</span>
               <div className="spacer" />
-              <Mini label="Back to folder" onClick={clearSearch} />
+              <Mini label="Back to Folder" onClick={clearSearch} />
             </div>
           )}
 

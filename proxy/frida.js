@@ -51,13 +51,6 @@ export async function listVersions(arch, limit = 12) {
     .map((r) => ({ version: r.tag_name, published: r.published_at }));
 }
 
-/** Newest release that ships a server for this arch. */
-export async function latestVersion(arch) {
-  const [newest] = await listVersions(arch, 1);
-  if (!newest) throw new Error(`no frida release ships an android-${arch} server`);
-  return newest.version;
-}
-
 // The frida client in node_modules and the server on the phone have to be the same release: a newer server
 // connects, then spawn or attach hangs or the agent crashes. So 'latest' means the version this install runs.
 const CLIENT_VERSION = JSON.parse(readFileSync(fileURLToPath(new URL('../node_modules/frida/package.json', import.meta.url)), 'utf8')).version;

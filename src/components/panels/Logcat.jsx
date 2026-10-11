@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { Chip, Search, AppSelect } from '../ui.jsx';
 
@@ -63,7 +63,7 @@ export function Logcat() {
         ))}
         <div className="vrule" style={{ height: 20, margin: '0 3px' }} />
         <Search value={s.logQ} onChange={(e) => set({ logQ: e.target.value })} placeholder="filter tag or message…" />
-        <AppSelect apps={s.apps} appIcons={s.appIcons} value={s.logApp} allowAll placeholder="All apps"
+        <AppSelect apps={s.apps} appIcons={s.appIcons} value={s.logApp} allowAll placeholder="All Apps"
           open={s.logAppOpen} onToggle={(v) => set({ logAppOpen: v })} onPick={setLogApp} />
         <Chip sans on={s.paused} onClick={() => set({ paused: !s.paused })}>{s.paused ? 'Resume' : 'Pause'}</Chip>
         <button className="btn-quiet" onClick={() => set({ logs: [] })}>Clear</button>

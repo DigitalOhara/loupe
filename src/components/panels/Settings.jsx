@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { Chip, Search, Mini, EmptyState, Split } from '../ui.jsx';
 

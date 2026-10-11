@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export const Icon = ({ d, size = 15, sw = 1.4, children }) => (
@@ -77,7 +77,7 @@ export const EmptyState = ({ children }) => (
 
 /**
  * Dropdown that picks an installed app, sorted by friendly name, with its icon.
- * Used by Frida (target) and Logcat (filter). `allowAll` prepends an "All apps"
+ * Used by Frida (target) and Logcat (filter). `allowAll` prepends an "All Apps"
  * entry (picks ''). Open state and selection are owned by the caller.
  */
 export function AppSelect({ apps, appIcons = {}, value, placeholder = 'Select app', open, onToggle, onPick, allowAll = false, width = 320 }) {
@@ -129,7 +129,7 @@ export function AppSelect({ apps, appIcons = {}, value, placeholder = 'Select ap
                   ? <img src={appIcons[pkg]} width={18} height={18} alt="" style={{ flex: '0 0 auto', borderRadius: 4 }} />
                   : <span style={{ flex: '0 0 auto', width: 18 }} />}
                 <span className="mono" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {pkg ? (friendlyName(pkg) || pkg) : 'All apps'}
+                  {pkg ? (friendlyName(pkg) || pkg) : 'All Apps'}
                 </span>
                 {pkg && <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink3)', marginLeft: 'auto', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pkg}</span>}
               </button>

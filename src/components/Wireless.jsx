@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLoupe } from '../store.jsx';
 import { Mini, Tab } from './ui.jsx';
 import qrcode from 'qrcode-generator';
@@ -21,8 +21,8 @@ function QrImage({ payload }) {
 }
 
 const TABS = [
-  { id: 'code', label: 'Pair code' },
-  { id: 'qr', label: 'QR code' },
+  { id: 'code', label: 'Pair Code' },
+  { id: 'qr', label: 'QR Code' },
   { id: 'connect', label: 'Connect' }
 ];
 
@@ -106,7 +106,7 @@ export function Wireless() {
       {s.wifiDevices.length > 0 && (
         <>
           <div className="menu-sep" />
-          <div className="label" style={{ padding: '0 2px' }}>Wireless devices</div>
+          <div className="label" style={{ padding: '0 2px' }}>Wireless Devices</div>
           {s.wifiDevices.map((d) => (
             <button key={d.serial} className="menu-item" onClick={() => useWirelessDevice(d.serial)}>
               <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>

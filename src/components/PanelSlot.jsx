@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLoupe, DEFAULT_LAYOUT } from '../store.jsx';
 import { Icon, Tab, useDismiss } from './ui.jsx';
 
@@ -66,7 +66,7 @@ export function PanelSlot({ defs, active, open, other, split, isTop, panels, onM
           </button>
           {menu && (
             <div className="menu pane-menu" style={{ top: 'calc(100% + 2px)', left: 'auto', right: 0, width: 220, maxHeight: 360, overflow: 'auto' }}>
-              <div className="label" style={{ padding: '4px 8px' }}>Tabs in this pane</div>
+              <div className="label" style={{ padding: '4px 8px' }}>Tabs in This Pane</div>
               {defs.map((d) => (
                 <button key={d.id} className={'menu-item' + (active === d.id ? ' on' : '')} onClick={() => pick(d.id)}>
                   {d.label}{d.badge ? <span className="tab-badge">{d.badge}</span> : null}
@@ -76,7 +76,7 @@ export function PanelSlot({ defs, active, open, other, split, isTop, panels, onM
               <button className="menu-item" onClick={moveActive} disabled={!active}>
                 Move this tab to the {isTop ? 'bottom' : 'top'} pane
               </button>
-              <button className="menu-item" onClick={reset}>Reset layout</button>
+              <button className="menu-item" onClick={reset}>Reset Layout</button>
             </div>
           )}
         </div>

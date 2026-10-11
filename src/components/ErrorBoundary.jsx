@@ -29,7 +29,7 @@ export class ErrorBoundary extends React.Component {
         color: 'var(--ink, #e8ebef)', fontFamily: 'ui-monospace, monospace', fontSize: 12, lineHeight: 1.7
       }}>
         <div style={{ color: 'var(--err, #ff6b6b)', fontSize: 15, fontWeight: 700, marginBottom: 10 }}>
-          Loupe hit a runtime error
+          Loupe Hit a Runtime Error
         </div>
         <div style={{ marginBottom: 14, color: 'var(--ink2, #98a0aa)' }}>
           The UI stopped rendering. The error is below: copy it and the app can be fixed.
@@ -55,7 +55,7 @@ export class ErrorBoundary extends React.Component {
             border: '1px solid var(--line2, #2f353c)', background: 'var(--bg3, #16191d)',
             color: 'var(--ink, #e8ebef)', font: 'inherit'
           }}>
-          Try to re-render
+          Try to Re-render
         </button>
       </div>
     );

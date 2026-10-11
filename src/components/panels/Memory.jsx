@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { Search, Mini, EmptyState, Split } from '../ui.jsx';
 
@@ -31,7 +31,7 @@ export function Memory() {
           <>
             <Mini label="Snapshot (meminfo)" onClick={() => memSnapshot(sel.pid, sel.name)} />
             <Mini label="Maps" onClick={() => memMaps(sel.pid)} />
-            <Mini tone="accent" label="Capture memory → PC" onClick={() => dumpHeap(sel.pid, sel.name)}
+            <Mini tone="accent" label="Capture Memory → PC" onClick={() => dumpHeap(sel.pid, sel.name)}
               title="hprof if the app is debuggable, otherwise an ELF core (needs root)" />
           </>
         )}
@@ -41,7 +41,7 @@ export function Memory() {
       {sel && s.rootMode && (
         <div className="panel-toolbar" style={{ borderTop: 'none' }}>
           <span className="mono" style={{ fontSize: 10, color: 'var(--warn)' }}># root</span>
-          <span className="label">ELF core dump</span>
+          <span className="label">ELF Core Dump</span>
           <div className="field" style={{ flex: '1 1 150px', minWidth: 120 }}>
             <input value={s.memRegionQ} onChange={(e) => set({ memRegionQ: e.target.value })}
               placeholder="filter regions (e.g. dalvik, libxul, heap)…" />
@@ -54,7 +54,7 @@ export function Memory() {
               border: '1px solid var(--line)', borderRadius: 7, background: 'var(--bg2)'
             }} />
           <span className="mono" style={{ fontSize: 10, color: 'var(--ink3)' }}>MB</span>
-          <Mini tone="danger" label={s.memBusy ? 'Dumping…' : 'Force core dump'}
+          <Mini tone="danger" label={s.memBusy ? 'Dumping…' : 'Force Core Dump'}
             disabled={s.memBusy} onClick={() => dumpMemory(sel.pid, sel.name)} />
         </div>
       )}
@@ -94,12 +94,12 @@ export function Memory() {
             <div className="mono preview-note">
               Pick a process: its <span style={{ color: 'var(--ink2)' }}>meminfo</span> loads
               automatically. Then use <span style={{ color: 'var(--ink2)' }}>Maps</span> for its
-              address space, or <span style={{ color: 'var(--ink2)' }}>Capture memory</span> to
+              address space, or <span style={{ color: 'var(--ink2)' }}>Capture Memory</span> to
               pull a dump to your PC.
               <br /><br />
               Capture picks whatever works: an <span style={{ color: 'var(--ink2)' }}>.hprof</span>
               when the app is debuggable, otherwise it falls back automatically to an
-              <span style={{ color: 'var(--ink2)' }}> ELF core</span> read from
+              <span style={{ color: 'var(--ink2)' }}> ELF Core</span> read from
               /proc/&lt;pid&gt;/mem (needs root): which opens in gdb, radare2 or Ghidra.
             </div>
           )}

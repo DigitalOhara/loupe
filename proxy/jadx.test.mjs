@@ -7,7 +7,6 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import zlib from 'node:zlib';
 
 // Under the real home on purpose: that is where ~/.loupe lives, and /Users is denied inside the sandbox.
 process.env.LOUPE_HOME = fs.mkdtempSync(path.join(os.homedir(), '.loupe-test-'));

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { Search, Mini, EmptyState, friendlyName } from '../ui.jsx';
 
@@ -108,8 +108,8 @@ export function Procs() {
             }}>{p.cpu.toFixed(1)}%</span>
             <span style={{ width: 86, textAlign: 'right', color: 'var(--ink2)' }}>{mb(p.rss)}</span>
             <span style={{ width: 120, flex: '0 0 auto', display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-              <Mini label="stop" onClick={() => { runShell(`am force-stop ${p.name}`); toast('force-stop ' + p.name); }} />
-              <Mini tone="danger" label="kill" onClick={() => { runShell(`kill ${p.pid}`); toast('kill ' + p.pid); }} />
+              <Mini label="Stop" onClick={() => { runShell(`am force-stop ${p.name}`); toast('force-stop ' + p.name); }} />
+              <Mini tone="danger" label="Kill" onClick={() => { runShell(`kill ${p.pid}`); toast('kill ' + p.pid); }} />
             </span>
           </div>
         ))}

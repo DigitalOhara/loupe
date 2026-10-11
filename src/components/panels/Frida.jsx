@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { useLoupe } from '../../store.jsx';
@@ -56,14 +56,14 @@ export function Frida() {
           {s.fridaInstalled ? `installed v${s.fridaInstalled}` : 'not installed'}
         </span>
 
-        <Mini label={s.fridaWorking ? 'Working…' : s.fridaInstalled ? 'Reinstall matching server' : 'Download + install'}
+        <Mini label={s.fridaWorking ? 'Working…' : s.fridaInstalled ? 'Reinstall Matching Server' : 'Download + Install'}
           tone="accent" disabled={s.fridaWorking || !s.connected}
           title="Fetches the frida-server release that matches Loupe's Frida client, for this device's ABI, and pushes it to /data/local/tmp"
           onClick={installFrida} />
 
         {f?.running
-          ? <Mini label="Stop server" tone="danger" disabled={s.fridaWorking} onClick={stopFrida} />
-          : <Mini label="Start server" disabled={s.fridaWorking || !s.fridaInstalled} onClick={startFrida} />}
+          ? <Mini label="Stop Server" tone="danger" disabled={s.fridaWorking} onClick={stopFrida} />
+          : <Mini label="Start Server" disabled={s.fridaWorking || !s.fridaInstalled} onClick={startFrida} />}
       </div>
 
       <Split id="frida">
@@ -72,9 +72,9 @@ export function Frida() {
             <span>Script</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0 }}>
               <AppSelect apps={s.apps} appIcons={s.appIcons} value={s.fridaTarget}
-                placeholder="Select target app" open={s.fridaTargetOpen}
+                placeholder="Select Target App" open={s.fridaTargetOpen}
                 onToggle={(v) => set({ fridaTargetOpen: v })} onPick={(pkg) => set({ fridaTarget: pkg })} />
-              <label className="mono" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9.5, color: 'var(--ink3)', cursor: 'pointer' }}
+              <label className="mono" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--ink3)', cursor: 'pointer' }}
                 title="Launch the app fresh instead of attaching to it running">
                 <input type="checkbox" checked={s.fridaSpawn}
                   onChange={(e) => set({ fridaSpawn: e.target.checked })} />
@@ -83,7 +83,7 @@ export function Frida() {
               {s.fridaRunning
                 ? <button className="mini danger" onClick={stopScript}>■ Stop</button>
                 : <button className="mini accent" disabled={!f?.running || !target} onClick={runScript}
-                    title={!f?.running ? 'Start frida-server first' : !target ? 'Pick a target app' : 'Run this script'}>
+                    title={!f?.running ? 'Start frida-server first' : !target ? 'Pick a Target App' : 'Run This Script'}>
                     ▶ Run
                   </button>}
             </span>
@@ -113,10 +113,10 @@ export function Frida() {
 
         <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={sectionHead}>
-            <span>{s.fridaRunning ? 'Output · running' : 'Server & script log'}</span>
+            <span>{s.fridaRunning ? 'Output · running' : 'Server & Script Log'}</span>
             {s.fridaLog.length > 0 && (
               <button className="linkbtn to-accent mono" style={{ fontSize: 9.5, color: 'var(--ink3)' }}
-                onClick={() => set({ fridaLog: [] })}>clear</button>
+                onClick={() => set({ fridaLog: [] })}>Clear</button>
             )}
           </div>
           <div ref={logRef} className="scroll mono" style={{ flex: '1 1 auto', padding: '9px 11px', fontSize: 11, lineHeight: 1.8, color: 'var(--ink2)' }}>

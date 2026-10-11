@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLoupe } from '../store.jsx';
 
 export function Toast() {
