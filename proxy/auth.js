@@ -21,7 +21,7 @@ const eq = (a, b) => {
 };
 
 /** Bearer header for fetches; `loupe.<token>` subprotocol for WebSockets (they can't set headers). */
-export function tokenOf(req) {
+function tokenOf(req) {
   const m = /^Bearer (\S+)$/.exec(req.headers.authorization || '');
   if (m) return m[1];
   const p = String(req.headers['sec-websocket-protocol'] || '').split(',').map((s) => s.trim())

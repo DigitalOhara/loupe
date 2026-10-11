@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLoupe } from '../../store.jsx';
 import { Chip, Search, Mini, EmptyState, friendlyName, Split } from '../ui.jsx';
 
 const FILTERS = [
-  { id: 'user', label: 'user' }, { id: 'system', label: 'system' }, { id: 'all', label: 'all' }
+  { id: 'user', label: 'User' }, { id: 'system', label: 'System' }, { id: 'all', label: 'All' }
 ];
 
 // Real app icons live in APK resources ADB can't extract without pulling every
@@ -48,19 +48,21 @@ function AppInfo() {
       <div className="preview-head mono">
         <span style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.appSel}</span>
         <span style={{ flex: '0 0 auto', display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
-          <Mini label="decompile" title="Pull this app's APK and open it in the Decompiler"
+          <Mini tone="info" label="Decompile" title="Pull this app's APK and open it in the Decompiler"
             onClick={() => set({ view: 'decompiler', jxRequest: { kind: 'package', pkg: s.appSel } })} />
+          <Mini tone="accent" label="Analyze" title="Pull this app's APK, decompile it and run a static scan"
+            onClick={() => set({ view: 'decompiler', jxRequest: { kind: 'package', pkg: s.appSel, analyze: true } })} />
           {i.dataDir && i.dataDir !== '—' && (
-            <Mini label="data dir" title="Open the data dir in Files" onClick={() => browseTo(i.dataDir)} />
+            <Mini label="Data Dir" title="Open the data dir in Files" onClick={() => browseTo(i.dataDir)} />
           )}
-          <Mini label={i.enabled ? 'disable' : 'enable'}
+          <Mini label={i.enabled ? 'Disable' : 'Enable'}
             onClick={() => {
               if (i.enabled) ask({ title: 'Disable this app?', body: <>The app will stop running and disappear from the launcher until you enable it again: <span className="mono" style={{ color: 'var(--ink)' }}>{s.appSel}</span>.</>, yes: 'Disable' }, () => setAppEnabled(s.appSel, false));
               else setAppEnabled(s.appSel, true);
             }} />
-          <Mini label="clear cache" onClick={() => clearAppCache(s.appSel)} />
-          <Mini tone="danger" label="clear data"
-            onClick={() => ask({ title: 'Clear all data?', body: <>This deletes every file, database, and setting of <span className="mono" style={{ color: 'var(--ink)' }}>{s.appSel}</span>. It cannot be undone.</>, yes: 'Clear data', danger: true }, () => clearAppData(s.appSel))} />
+          <Mini label="Clear Cache" onClick={() => clearAppCache(s.appSel)} />
+          <Mini tone="danger" label="Clear Data"
+            onClick={() => ask({ title: 'Clear all data?', body: <>This deletes every file, database, and setting of <span className="mono" style={{ color: 'var(--ink)' }}>{s.appSel}</span>. It cannot be undone.</>, yes: 'Clear Data', danger: true }, () => clearAppData(s.appSel))} />
         </span>
       </div>
 
@@ -139,17 +141,17 @@ export function Apps() {
                   <span className="mono" style={{ fontSize: 11, color: 'var(--ink3)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pkg}</span>
                 </span>
                 <span style={{ display: 'flex', gap: 4, flex: '0 0 auto' }}>
-                  <Mini label="launch" onClick={(e) => {
+                  <Mini label="Launch" onClick={(e) => {
                     e.stopPropagation();
                     runShell(`monkey -p ${pkg} -c android.intent.category.LAUNCHER 1`);
                     toast('launch ' + pkg);
                   }} />
-                  <Mini label="stop" onClick={(e) => {
+                  <Mini label="Stop" onClick={(e) => {
                     e.stopPropagation();
                     runShell(`am force-stop ${pkg}`);
                     toast('force-stop ' + pkg);
                   }} />
-                  <Mini tone="danger" label="uninstall" onClick={(e) => {
+                  <Mini tone="danger" label="Uninstall" onClick={(e) => {
                     e.stopPropagation();
                     ask({ title: 'Uninstall this app?', body: <><span className="mono" style={{ color: 'var(--ink)' }}>{pkg}</span> and its data will be removed from the phone.</>, yes: 'Uninstall', danger: true }, () => uninstallApp(pkg));
                   }} />

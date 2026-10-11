@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as jx from '../lib/jadx.js';
-import { Chip, Mini } from './ui.jsx';
+import { ago } from '../lib/format.js';
+import { Chip } from './ui.jsx';
 
 const SCOPES = [['all', 'All'], ['code', 'Code'], ['res', 'Resources'], ['names', 'Names']];
-const SEV = { high: 'var(--err)', med: 'var(--warn)', low: 'var(--ink2)', info: 'var(--ink3)' };
 
 /** A match line with the hit highlighted: t is the preview, o/n the hit inside it. */
 const Preview = ({ m }) => (
@@ -110,7 +110,7 @@ export function InfoView({ info }) {
         <KV k="package" v={m.package} />
         <KV k="version" v={m.versionName && `${m.versionName} (${m.versionCode})`} />
       </Sec>
-      <Sec title="SDK compatibility">
+      <Sec title="SDK Compatibility">
         <KV k="minSdk" v={m.minSdk} />
         <KV k="targetSdk" v={m.targetSdk} />
       </Sec>
@@ -239,19 +239,9 @@ function CopyText({ text, shown = text, label, onCopied }) {
   );
 }
 
-const AGO = [[60, 's'], [3600, 'min'], [86400, 'h'], [86400 * 30, 'd']];
-/** "12 min ago", falling back to the date after a month. The exact time goes in the tooltip. */
-const ago = (ms) => {
-  const sec = Math.max(0, (Date.now() - ms) / 1000);
-  if (sec < 45) return 'just now';
-  let div = 1;
-  for (const [lim, u] of AGO) { if (sec < lim) return `${Math.floor(sec / div)} ${u} ago`; div = lim; }
-  return new Date(ms).toLocaleDateString();
-};
-
 /** Red trash button; the tooltip says what it does. */
-const TrashButton = ({ onClick }) => (
-  <button className="btn-quiet" title="Delete from cache" aria-label="Delete from cache" style={{ padding: '3px 6px', color: 'var(--err)', display: 'inline-flex' }}
+export const TrashButton = ({ onClick, title = 'Delete from cache' }) => (
+  <button className="btn-quiet" title={title} aria-label={title} style={{ padding: '3px 6px', color: 'var(--err)', display: 'inline-flex' }}
     onClick={(e) => { e.stopPropagation(); onClick(); }}>
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a1 1 0 001 1h8a1 1 0 001-1l1-14M10 11v6M14 11v6" />
@@ -260,13 +250,13 @@ const TrashButton = ({ onClick }) => (
 );
 
 const SORTS = {
-  newest: ['Newest first', (a, b) => b.createdAt - a.createdAt],
+  newest: ['Newest First', (a, b) => b.createdAt - a.createdAt],
   name: ['Name', (a, b) => (a.label || a.name).localeCompare(b.label || b.name)],
-  size: ['Largest first', (a, b) => (b.apkSize || 0) - (a.apkSize || 0)]
+  size: ['Largest First', (a, b) => (b.apkSize || 0) - (a.apkSize || 0)]
 };
 
-/** Past scans, like MobSF's Recent Scans: one row per decompiled APK, searchable and sortable. */
-export function RecentScans({ items, onOpen, onDelete, onCopied }) {
+/** The decompiled apps in the cache, one row per APK, searchable and sortable. Each row can open the app, send it to the Analyzer, or delete it. */
+export function DecompiledApps({ items, scans = {}, onOpen, onAnalyze, onResults, onDelete, onCopied }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('newest');
   const shown = useMemo(() => {
@@ -277,18 +267,18 @@ export function RecentScans({ items, onOpen, onDelete, onCopied }) {
   return (
     <div>
       <div className="jx-recent-bar">
-        <h3>Recent scans</h3>
+        <h3>Decompiled Apps</h3>
         <div className="field" style={{ flex: '0 1 200px' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search scans" aria-label="Search scans" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search apps" aria-label="Search apps" />
         </div>
-        <select className="jx-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort scans">
+        <select className="jx-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort apps">
           {Object.entries(SORTS).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
         </select>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table className="jx-scans" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr><th /><th>App</th><th>Package</th><th>Version</th><th>SDK</th><th>MD5</th><th className="num">Size</th><th>Scanned</th><th /></tr>
+            <tr><th /><th>App</th><th>Package</th><th>Version</th><th>SDK</th><th>MD5</th><th className="num">Size</th><th>Decompiled</th><th>Analyzed</th><th /></tr>
           </thead>
           <tbody>
             {shown.map((r) => (
@@ -304,9 +294,19 @@ export function RecentScans({ items, onOpen, onDelete, onCopied }) {
                 <td className="mono" style={{ fontSize: 11 }} title={r.md5 || ''}>{r.md5 ? <CopyText text={r.md5} shown={r.md5.slice(0, 12)} label="MD5" onCopied={onCopied} /> : '-'}</td>
                 <td className="mono num" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{fmtSize(r.apkSize)}</td>
                 <td className="mono" style={{ fontSize: 11, whiteSpace: 'nowrap' }} title={new Date(r.createdAt).toLocaleString()}>{ago(r.createdAt)}</td>
-                <td style={{ width: 40 }}><TrashButton onClick={() => onDelete(r)} /></td>
+                <td className="mono" style={{ fontSize: 11, whiteSpace: 'nowrap' }} title={[['static', 'Static'], ['dynamic', 'Dynamic']].filter(([k]) => scans[r.id]?.[k]).map(([k, l]) => `${l}: ${new Date(scans[r.id][k].at).toLocaleString()}`).join('\n')}>{scans[r.id] ? ago(Math.max(scans[r.id].static?.at || 0, scans[r.id].dynamic?.at || 0)) : '-'}</td>
+                <td style={{ width: 280, whiteSpace: 'nowrap' }}>
+                  <span className="jx-row-actions">
+                    {scans[r.id] && <button className="btn jx-analyze jx-results" title={`Open the stored scan result${scans[r.id].static ? ` (${scans[r.id].static.findings} findings)` : ''}`} onClick={(e) => { e.stopPropagation(); onResults(r, scans[r.id]); }}>View Results</button>}
+                    <button className={`btn jx-analyze${scans[r.id]?.static ? ' btn-accent' : ''}`} title={scans[r.id]?.static ? 'Scan this app again' : 'Run a static security scan on this app'} onClick={(e) => { e.stopPropagation(); onAnalyze(r); }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z" /><path d="M9 12l2 2 4-4" /></svg>
+                      {scans[r.id]?.static ? 'Rescan' : 'Analyze'}
+                    </button>
+                    <TrashButton onClick={() => onDelete(r)} />
+                  </span>
+                </td>
               </tr>))}
-            {!shown.length && <tr><td colSpan={9} className="subtle" style={{ textAlign: 'center', padding: 16 }}>No scans match "{q}".</td></tr>}
+            {!shown.length && <tr><td colSpan={9} className="subtle" style={{ textAlign: 'center', padding: 16 }}>No apps match "{q}".</td></tr>}
           </tbody>
         </table>
       </div>

@@ -5,6 +5,7 @@ import * as webadb from './lib/webadb.js';
 import * as mirror from './lib/scrcpy.js';
 import { bridgeFetch, bridgeWS } from './lib/bridge.js';
 import * as record from './lib/record.js';
+import { getSession, stopSession } from './lib/session.js';
 import { buildCore, machineFor } from './lib/elfcore.js';
 
 const LIMITS = { logs: 2000, shell: 1500, perf: 60 };
@@ -229,8 +230,9 @@ export const DEFAULT_LAYOUT = { topTabs: ['info', 'logcat', 'traffic', 'proxy', 
 
 const initialState = {
   theme: 'dark',
-  view: 'console',     // 'console' | 'decompiler'
-  jxRequest: null,     // a request for the decompiler (from Apps, Files, drag-and-drop)
+  view: 'console',     // 'console' | 'decompiler' | 'analyzer'
+  azRequest: null,     // the Decompiler asking the Analyzer to run a static scan on { id }
+  jxRequest: null,     // a request for the decompiler (from Apps, Files, drag-and-drop, Analyzer evidence)
   connected: false,
   devOpen: false, rebootOpen: false, installPrompt: null, confirmAsk: null,
   device: null,
@@ -1527,6 +1529,7 @@ export function LoupeProvider({ children }) {
       },
 
       connectWifiAddr: async () => {
+        if (getSession().active) { toast('Stop the analyzer session before connecting another device.'); return; }
         const addr = s.connectAddr.trim();
         if (!/^\S+(:\d+)?$/.test(addr)) { toast('Address looks like 192.168.1.42:5555'); return; }
         set({ wifiBusy: true, wifiLog: [`· adb connect ${addr}…`] });
@@ -1566,6 +1569,7 @@ export function LoupeProvider({ children }) {
       },
 
       connectUsb: async () => {
+        if (getSession().active) { toast('Stop the analyzer session before connecting another device.'); return; }
         if (!webadb.usbSupported()) { toast('WebUSB needs Chrome or Edge.'); return; }
         set({ devOpen: false, bottom: 'shell', bottomOpen: true });
         const step = (msg) => shellOut(['· ' + msg], 'dim');
@@ -1594,9 +1598,10 @@ export function LoupeProvider({ children }) {
 
       // Covers both transports: closing the Adb instance tears down its streams
       // either way. For Wi-Fi we deliberately leave the host adb server attached
-      // so the device stays in "Wireless devices" for a one-click re-attach.
+      // so the device stays in "Wireless Devices" for a one-click re-attach.
       disconnectDevice: async () => {
         await actions.stopMirror();          // also stops any recording
+        await stopSession().catch(() => {});   // finish the analyzer session on this phone, so a later device cannot add its files or notifications to it
         await webadb.disconnect();
         revokePreview();
         set({

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { LoupeProvider, useLoupe } from './store.jsx';
 import { Header } from './components/Header.jsx';
 import { Mirror } from './components/Mirror.jsx';
@@ -18,6 +18,7 @@ import { Shell } from './components/panels/Shell.jsx';
 import { Frida } from './components/panels/Frida.jsx';
 import { Files } from './components/panels/Files.jsx';
 const Decompiler = lazy(() => import('./components/Decompiler.jsx'));
+const Analyzer = lazy(() => import('./components/Analyzer.jsx'));
 import { Apps } from './components/panels/Apps.jsx';
 import { Procs } from './components/panels/Procs.jsx';
 import { DeviceInfo } from './components/panels/DeviceInfo.jsx';
@@ -40,6 +41,8 @@ function Workspace() {
   const [railDragging, setRailDragging] = useState(false);
   const [mounted, setMounted] = useState(false);     // load the decompiler chunk on first use
   useEffect(() => { if (s.view === 'decompiler') setMounted(true); }, [s.view]);
+  const [azMounted, setAzMounted] = useState(false);
+  useEffect(() => { if (s.view === 'analyzer') setAzMounted(true); }, [s.view]);
 
   // Drop an .apk anywhere to decompile it.
   useEffect(() => {
@@ -141,6 +144,7 @@ function Workspace() {
         </main>
       </div>
       {mounted && <Suspense fallback={null}><Decompiler /></Suspense>}
+      {azMounted && <Suspense fallback={null}><Analyzer /></Suspense>}
       </div>
 
       <InstallPrompt />

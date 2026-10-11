@@ -14,6 +14,7 @@ import { handleAdbApi, attachAdbSockets, accessOk } from './adb-bridge.js';
 import { handleFridaApi, attachFridaSockets } from './frida.js';
 import { handleCertApi } from './cert.js';
 import { handleJadxApi } from './jadx.js';
+import { handleAnalyzerApi } from './analyzer/api.js';
 import { TOKEN, hostOk, tokenOk } from './auth.js';
 
 function localAddresses() {
@@ -32,7 +33,7 @@ const cors = (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 };
 
-export function startProxy({ port = 8080, host = '0.0.0.0' } = {}) {
+export function startProxy({ port = 8090, host = '0.0.0.0' } = {}) {
   const server = http.createServer((req, res) => {
     const path = req.url.split('?')[0];
     // Every endpoint reaches the device or the network on the user's behalf, so
@@ -58,6 +59,7 @@ export function startProxy({ port = 8080, host = '0.0.0.0' } = {}) {
     if (path.startsWith('/__loupe/frida/')) { handleFridaApi(req, res, path, { cors }); return; }
     if (path.startsWith('/__loupe/cert/')) { handleCertApi(req, res, path); return; }
     if (path.startsWith('/__loupe/jadx/')) { handleJadxApi(req, res, path); return; }
+    if (path.startsWith('/__loupe/analyzer/')) { handleAnalyzerApi(req, res, path); return; }
     if (path === '/__loupe/info') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, addresses: localAddresses() }));
@@ -99,7 +101,7 @@ export function startProxy({ port = 8080, host = '0.0.0.0' } = {}) {
 
 // Standalone: `node proxy/server.js`
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const port = Number(process.argv[2]) || 8080;
+  const port = Number(process.argv[2]) || 8090;
   startProxy({ port }).then(() => {
     console.log(`Loupe bridge listening on :${port}`);
   }).catch((err) => {

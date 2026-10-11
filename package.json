@@ -6,10 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
     "proxy": "node proxy/server.js",
     "build:frida-bridge": "node scripts/build-frida-bridge.mjs",
-    "test": "node --test proxy/*.test.mjs"
+    "test": "node --test proxy/*.test.mjs proxy/analyzer/*.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-java": "^6.0.2",

@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLoupe } from '../store.jsx';
 import { RailHeading, Icon } from './ui.jsx';
 import { AndroidKeyCode } from '../lib/scrcpy.js';
+import { useSession } from '../lib/session.js';
 
 /**
  * Mirror toolbar. Every key is a real scrcpy control message (or an adb
@@ -75,6 +76,15 @@ function DeviceScreen({ canvasRef }) {
   const { s, pointerDown, pointerMove, pointerUp, startMirror } = useLoupe();
   const wrapRef = useRef(null);
   const down = useRef(false);
+  const rec = useSession();
+  const auto = useRef(0);
+
+  // A recording session sends you here to watch the app, so a stopped mirror starts by itself, once per session (stopping it by hand sticks).
+  useEffect(() => {
+    if (!rec.active || auto.current === rec.startedAt || !s.connected || s.mirrorOn || s.mirrorBusy || !canvasRef.current) return;
+    auto.current = rec.startedAt;
+    startMirror(canvasRef.current);
+  }, [rec.active, rec.startedAt, s.connected, s.mirrorOn, s.mirrorBusy]);
 
   const aspect = s.mirrorSize && s.mirrorSize.width
     ? `${s.mirrorSize.width} / ${s.mirrorSize.height}`
@@ -161,7 +171,7 @@ function DeviceScreen({ canvasRef }) {
             <button className="btn-accent" disabled={s.mirrorBusy}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); startMirror(canvasRef.current); }}>
-              {s.mirrorBusy ? 'Starting…' : 'Start mirroring'}
+              {s.mirrorBusy ? 'Starting…' : 'Start Mirroring'}
             </button>
           ) : (
             <div className="mono" style={{ color: 'var(--ink3)', fontSize: 10, lineHeight: 1.6 }}>
@@ -200,7 +210,7 @@ export function Mirror() {
         </span>
         <button
           className={'toolkey' + (s.mirrorOn ? ' on' : '')}
-          title={s.mirrorOn ? 'Stop mirroring' : 'Start mirroring'}
+          title={s.mirrorOn ? 'Stop Mirroring' : 'Start Mirroring'}
           disabled={!s.connected || s.mirrorBusy}
           onClick={() => (s.mirrorOn ? stopMirror() : startMirror(canvasRef.current))}
         >
@@ -226,7 +236,7 @@ export function Mirror() {
             onKeyDown={(e) => { if (e.key === 'Enter') sendText(); }}
             placeholder="Type text into the device…"
             style={{ flex: '1 1 auto', minWidth: 0, fontSize: 10.5 }} />
-          <button onClick={sendText} style={{ fontSize: 10.5, color: 'var(--accent)', fontWeight: 600 }}>Send</button>
+          <button onClick={sendText} style={{ fontSize: 'var(--fs-ui)', color: 'var(--accent)', fontWeight: 600 }}>Send</button>
         </div>
       </div>
     </aside>

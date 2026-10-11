@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useLoupe } from '../store.jsx';
 import * as webadb from '../lib/webadb.js';
 import * as jx from '../lib/jadx.js';
+import * as az from '../lib/analyzer.js';
 import { AppSelect, Mini, Split, Tab, useDismiss } from './ui.jsx';
 import { CodePane } from './CodePane.jsx';
-import { SearchPanel, InfoView, Tree, RecentScans, AppIcon } from './JxPanels.jsx';
+import { SearchPanel, InfoView, Tree, DecompiledApps, AppIcon } from './JxPanels.jsx';
 
 const OPTS_KEY = 'loupe.jx.opts';
 const DEFAULTS = { deobf: false, deobfMin: 3, deobfMax: 64, useSourceName: false, showBadCode: true };
@@ -22,7 +23,7 @@ function SetupCard({ tc, pendingName, onInstall }) {
       checksum-pinned, nothing installed system-wide){pendingName ? <>, then decompiles <b>{pendingName}</b> automatically</> : null}.{' '}
       {tc.installing
         ? <span className="mono" style={{ fontSize: 11.5 }}>{tc.progress?.phase || 'starting'}{pct ? ` ${pct}%` : '…'}</span>
-        : <Mini tone="accent" label={`Download ${tc.sizeMB} MB${pendingName ? ' and decompile' : ''}`} onClick={onInstall} />}
+        : <Mini tone="accent" label={`Download ${tc.sizeMB} MB${pendingName ? ' and Decompile' : ''}`} onClick={onInstall} />}
       {tc.error && <div style={{ color: 'var(--err)' }}>Download failed: {tc.error}</div>}
     </div>
   );
@@ -48,6 +49,7 @@ export default function Decompiler() {
   const [tabs, setTabs] = useState([]);
   const [cur, setCur] = useState(null);
   const [hit, setHit] = useState(null);
+  const [goto, setGoto] = useState(null);                 // a file to open once its project is on screen (from the Analyzer)
   const [term, setTerm] = useState(null);
   const [bottom, setBottom] = useState({ open: false, tab: 'search' });
   const [focusKey, setFocusKey] = useState(0);
@@ -56,7 +58,10 @@ export default function Decompiler() {
   const docs = useRef(new Map());                         // path -> { text | url | err }
   const lastFiles = useRef(null);
   const ctl = useRef(null);
+  const analyzeAfter = useRef(false);                  // the Apps panel's Analyze button: scan the app as soon as it is decompiled
   const picker = useRef(null);
+  const [scans, setScans] = useState({});                  // stored Analyzer results per decompiled app
+  useEffect(() => { if (active && recent.length) az.summary(recent.map((r) => r.id)).then(setScans).catch(() => setScans({})); }, [active, recent]);
 
   const refresh = useCallback(() => {
     jx.status().then(setTool).catch((e) => setTool({ error: e.message }));
@@ -69,7 +74,7 @@ export default function Decompiler() {
     const t = setInterval(() => jx.status().then(setTool).catch(() => {}), 700);
     return () => clearInterval(t);
   }, [tc?.installing]);
-  const deleteScan = (r) => jx.forget(r.id).then(() => setRecent((x) => x.filter((y) => y.id !== r.id))).catch((e) => toast(e.message));
+  const deleteApp = (r) => jx.forget(r.id).then(() => setRecent((x) => x.filter((y) => y.id !== r.id))).catch((e) => toast(e.message));
   const installTools = () => jx.installToolchain().then(setTool).catch((e) => toast(e.message));
   useEffect(() => { if (pending && tc?.installed) { const f = pending; setPending(null); run(f); } }, [tc?.installed, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { try { localStorage.setItem(OPTS_KEY, JSON.stringify(opts)); } catch { /* private mode */ } }, [opts]);
@@ -90,6 +95,7 @@ export default function Decompiler() {
 
   /** Decompiles one app (its base APK plus any splits). Returns true when it finished; `open` shows it afterwards. */
   const runOne = async (files, signal, open) => {
+    const analyze = analyzeAfter.current; analyzeAfter.current = false;
     setJob({ state: 'uploading', msg: 'uploading…', pct: 0 });
     try {
       const ups = [];
@@ -102,6 +108,7 @@ export default function Decompiler() {
       if (fin?.state !== 'done') { setJob(fin); return false; }
       setJob(null);
       if (open) await loadProject(j.id, files[0].name);
+      if (analyze) set({ view: 'analyzer', azRequest: { id: j.id } });
       return true;
     } catch (e) {
       if (e.code === 'no-toolchain') { setJob(null); refresh(); throw e; }
@@ -169,10 +176,10 @@ export default function Decompiler() {
   };
 
   const fromPackage = async (pkg) => {
-    if (!/^[A-Za-z0-9_.]+$/.test(pkg)) { toast('Unexpected package name'); return; }
+    if (!/^[A-Za-z0-9_.]+$/.test(pkg)) { analyzeAfter.current = false; toast('Unexpected package name'); return; }
     const out = await webadb.run(`pm path ${pkg}`).catch(() => '');
     const paths = out.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('package:')).map((l) => l.slice(8));
-    if (!paths.length) { toast(`No APK found for ${pkg}`); return; }
+    if (!paths.length) { analyzeAfter.current = false; toast(`No APK found for ${pkg}`); return; }
     await fromDevicePaths(paths, pkg);
   };
 
@@ -182,8 +189,9 @@ export default function Decompiler() {
     if (!r) return;
     set({ jxRequest: null });
     if (r.kind === 'files') fromFiles(r.files);
-    else if (r.kind === 'package') fromPackage(r.pkg);
+    else if (r.kind === 'package') { analyzeAfter.current = !!r.analyze; fromPackage(r.pkg); }
     else if (r.kind === 'path') fromDevicePaths([r.path], r.path.split('/').pop().replace(/\.apk$/i, ''));
+    else if (r.kind === 'open') { if (projId.current !== r.id) loadProject(r.id, r.name); setGoto({ id: r.id, path: r.path, line: r.line }); }
   }, [s.jxRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cancel = () => { if (job?.id) jx.cancel(job.id).catch(() => {}); ctl.current?.abort(); setJob(null); };
@@ -203,6 +211,13 @@ export default function Decompiler() {
     }
     bump();
   }, [proj]);
+
+  useEffect(() => {
+    if (!goto || proj?.id !== goto.id) return;
+    setGoto(null);
+    setPaneTab(goto.path.startsWith('resources/') ? 'resources' : 'sources');
+    openPath(goto.path, goto.line ? { l: goto.line, c: 0, n: 1 } : null);
+  }, [goto, proj, openPath]);
 
   const closeTab = (p) => {
     const rest = tabs.filter((x) => x !== p);
@@ -231,8 +246,8 @@ export default function Decompiler() {
     <div className="ctxbar" style={{ gap: 8 }}>
       <input ref={picker} type="file" accept=".apk" multiple hidden onChange={(e) => { fromFiles(e.target.files); e.target.value = ''; }} />
       {proj ? <>
-        <button className="btn" title="Back to the upload box and recent scans" onClick={() => { jx.recent().then(setRecent).catch(() => {}); closeProject(); }}>
-          <span aria-hidden="true">‹</span> Scans
+        <button className="btn" title="Back to the upload box and the decompiled apps" onClick={() => { jx.recent().then(setRecent).catch(() => {}); closeProject(); }}>
+          <span aria-hidden="true">‹</span> Apps
         </button>
         {here && <AppIcon id={here.id} path={here.icon} size={22} />}
         <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }} title={proj.name}>{here?.label || proj.name}</span>
@@ -250,14 +265,14 @@ export default function Decompiler() {
       )}
       <div className="spacer" />
       {s.connected && (
-        <AppSelect apps={s.apps} appIcons={s.appIcons} value="" placeholder="Pull from device" open={devOpen}
+        <AppSelect apps={s.apps} appIcons={s.appIcons} value="" placeholder="Pull from Device" open={devOpen}
           onToggle={setDevOpen} onPick={(pkg) => pkg && fromPackage(pkg)} />
       )}
       <span ref={optsRef} style={{ display: 'contents' }}>
-        <Mini tone={opts.deobf ? 'accent' : undefined} label={opts.deobf ? 'Deobf: on ⚙' : 'Deobf: off ⚙'} onClick={() => setOptsOpen((o) => !o)} />
+        <Mini tone={opts.deobf ? 'accent' : undefined} label={opts.deobf ? 'Deobf: On ⚙' : 'Deobf: Off ⚙'} onClick={() => setOptsOpen((o) => !o)} />
         {optsOpen && (
           <div className="menu" style={{ top: 'calc(100% + 4px)', left: 'auto', right: 8, width: 300, padding: 12, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12.5 }}>
-            <label className="jx-opt"><input type="checkbox" checked={opts.deobf} onChange={(e) => setOpts({ ...opts, deobf: e.target.checked })} /><span>Deobfuscate names</span></label>
+            <label className="jx-opt"><input type="checkbox" checked={opts.deobf} onChange={(e) => setOpts({ ...opts, deobf: e.target.checked })} /><span>Deobfuscate Names</span></label>
             <div className="jx-range" style={{ opacity: opts.deobf ? 1 : 0.45 }}>
               <div className="jx-hint">Rename names whose length is</div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -268,7 +283,7 @@ export default function Decompiler() {
             <label className="jx-opt" style={{ opacity: opts.deobf ? 1 : 0.45 }}><input type="checkbox" disabled={!opts.deobf} checked={opts.useSourceName} onChange={(e) => setOpts({ ...opts, useSourceName: e.target.checked })} /><span>Use source file names for classes</span></label>
             <label className="jx-opt"><input type="checkbox" checked={opts.showBadCode} onChange={(e) => setOpts({ ...opts, showBadCode: e.target.checked })} /><span>Show inconsistent code instead of hiding it</span></label>
             <div className="mono" style={{ fontSize: 10, color: 'var(--ink3)' }}>Changing these decompiles again into a separate cache entry.</div>
-            {lastFiles.current && <Mini tone="accent" label="Apply and decompile again" disabled={busy} onClick={() => { setOptsOpen(false); run(lastFiles.current); }} />}
+            {lastFiles.current && <Mini tone="accent" label="Apply and Decompile Again" disabled={busy} onClick={() => { setOptsOpen(false); run(lastFiles.current); }} />}
           </div>
         )}
       </span>
@@ -279,7 +294,7 @@ export default function Decompiler() {
   const Empty = (
     <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div className="jx-hero">
-        <h2>Decompile and inspect an Android app</h2>
+        <h2>Decompile and Inspect an Android App</h2>
         <p>Open an APK from disk, drop one anywhere in this window, or pull an installed app from the connected phone. You get decompiled Java, the decoded manifest and resources, search over everything, and signature checks.</p>
       </div>
       <div className="jx-zone">
@@ -293,7 +308,7 @@ export default function Decompiler() {
       </div>
       {recent.length > 0 && (
         <div style={{ width: 'min(1320px,100%)', margin: '0 auto' }}>
-          <RecentScans items={recent} onOpen={(r) => loadProject(r.id, r.name)} onDelete={deleteScan} onCopied={(what) => toast(`${what.replace(/^./, (c) => c.toUpperCase())} copied`)} />
+          <DecompiledApps items={recent} scans={scans} onResults={(r, sc) => set({ view: 'analyzer', azRequest: { id: r.id, scan: false, mode: sc.static ? 'static' : 'dynamic' } })} onOpen={(r) => loadProject(r.id, r.name)} onAnalyze={(r) => set({ view: 'analyzer', azRequest: { id: r.id } })} onDelete={deleteApp} onCopied={(what) => toast(`${what.replace(/^./, (c) => c.toUpperCase())} copied`)} />
         </div>)}
     </div>
   );

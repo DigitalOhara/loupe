@@ -21,3 +21,13 @@ export async function bridgeFetch(url, init = {}) {
 export async function bridgeWS(url) {
   return new WebSocket(url, [`loupe.${await getToken()}`]);
 }
+
+/** A query string from an object, leaving out empty values. */
+export const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== '')).toString();
+
+/** The JSON body of a bridge response, or an Error carrying the bridge's message, status and code. */
+export async function ok(res) {
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.ok === false) throw Object.assign(new Error(j.error || `bridge said ${res.status}`), { code: j.code, status: res.status });
+  return j;
+}

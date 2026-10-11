@@ -1,14 +1,7 @@
 /** Client for the bridge's decompiler API (/__loupe/jadx/*). See proxy/jadx.js. */
-import { bridgeFetch } from './bridge.js';
+import { bridgeFetch, qs, ok } from './bridge.js';
 
 const B = '/__loupe/jadx';
-const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== '')).toString();
-
-async function ok(res) {
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || j.ok === false) throw Object.assign(new Error(j.error || `bridge said ${res.status}`), { code: j.code, status: res.status });
-  return j;
-}
 
 export const status = () => bridgeFetch(`${B}/status`).then(ok);
 /** Starts the one-time download of Java + jadx; poll status() for progress. */

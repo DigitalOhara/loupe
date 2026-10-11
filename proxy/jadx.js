@@ -16,6 +16,7 @@ import { Worker } from 'node:worker_threads';
 import { spawn } from 'node:child_process';
 import { wrap, selfTest } from './sandbox.js';
 import { openZip } from './zipfile.js';
+import { NOSNIFF, HttpErr, json, readJson } from './http.js';
 import * as toolchain from './toolchain.js';
 
 const ROOT = process.env.LOUPE_HOME || path.join(os.homedir(), '.loupe');
@@ -29,10 +30,6 @@ const L = {
   search: { q: 200, results: 500, files: 100_000, fileBytes: 512 * 1024 ** 2, ms: 6000 }
 };
 const ID = /^[a-f0-9]{64}$/;
-const NOSNIFF = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
-
-class HttpErr extends Error { constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra; } }
-const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', ...NOSNIFF }); res.end(JSON.stringify(body)); };
 const exists = (p) => fsp.access(p).then(() => true, () => false);
 const rand = () => crypto.randomBytes(8).toString('hex');
 
@@ -406,6 +403,24 @@ async function signature(dir) {
   return out;
 }
 
+/** Signature verdicts for the split APKs (the base is `signature`). Cached per split, so a rescan costs nothing. */
+async function splitSignatures(dir) {
+  const files = (await fsp.readdir(path.join(dir, 'in')).catch(() => [])).filter((f) => /^split-\d+\.apk$/.test(f)).sort();
+  const out = [];
+  for (const f of files) {
+    const cache = path.join(dir, `sig-${f.slice(0, -4)}.json`);
+    let r = await fsp.readFile(cache, 'utf8').then(JSON.parse, () => null);
+    if (!r) {
+      const tc = toolchain.resolve();
+      r = tc ? await runVerify(tc, path.join(dir, 'in', f)) : { error: 'the Java toolchain is not installed' };
+      if (!r.error) await fsp.writeFile(cache, JSON.stringify(r)).catch(() => {});
+    }
+    out.push({ file: f, ...r });
+  }
+  return out;
+}
+export const entrySplitSignatures = splitSignatures;
+
 const VERIFY_DIR = fileURLToPath(new URL('./apk/', import.meta.url));
 export async function runVerify(tc, apk, minSdk) {
   await fsp.mkdir(TMP, { recursive: true });
@@ -461,6 +476,13 @@ async function manifestFacts(dir) {
   };
 }
 
+/** For the analyzer: a cache entry's directory and metadata (same id checks as every other reader), and its cached signature verdict. */
+export async function entryForAnalysis(id) {
+  const dir = await cacheDir(id);
+  return { dir, meta: JSON.parse(await fsp.readFile(path.join(dir, 'meta.json'), 'utf8')) };
+}
+export const entrySignature = signature;
+
 async function info(id) {
   const dir = await cacheDir(id);
   const meta = JSON.parse(await fsp.readFile(path.join(dir, 'meta.json'), 'utf8'));
@@ -494,12 +516,6 @@ async function forget(id) {
   jobs.delete(id);
   await fsp.rm(path.join(CACHE, id), { recursive: true, force: true });
 }
-
-const readJson = (req, max = 65536) => new Promise((resolve, reject) => {
-  let b = '';
-  req.on('data', (c) => { b += c; if (b.length > max) { req.destroy(); reject(new HttpErr(413, 'body too large')); } });
-  req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { reject(new HttpErr(400, 'bad json')); } });
-});
 
 export async function handleJadxApi(req, res, route) {
   try {

@@ -1,7 +1,8 @@
-import React from 'react';
 import { useLoupe } from '../store.jsx';
 import { Icon, useDismiss } from './ui.jsx';
 import { Wireless } from './Wireless.jsx';
+import { SessionBar } from './SessionBar.jsx';
+import { useSession } from '../lib/session.js';
 
 // Magnifier inspecting the Android head, with the "Loupe" wordmark (Poppins Bold, SIL OFL, as outlines so no font is needed).
 const Logo = () => (
@@ -58,7 +59,7 @@ function DevicePicker() {
                 <span className="mono" style={{ fontSize: 10, color: 'var(--ok)' }}>
                   {dev.kind === 'wifi' ? 'wi-fi' : 'usb'}
                 </span>
-                <button className="btn-quiet" style={{ color: 'var(--err)', fontSize: 11, fontWeight: 600 }}
+                <button className="btn-quiet" style={{ color: 'var(--err)', fontWeight: 600 }}
                   onClick={() => { close(); disconnectDevice(); }}>
                   Disconnect
                 </button>
@@ -93,7 +94,7 @@ function DevicePicker() {
             onClick={killAdbServer}
             title="Stops the host adb server so WebUSB can claim the USB device"
           >
-            Stop adb server (free USB)
+            Stop adb Server (Free USB)
           </button>
         </div>
       )}
@@ -157,7 +158,7 @@ function DeviceBar() {
         style={{ borderColor: s.rootMode ? 'var(--warn)' : undefined, color: s.rootMode ? 'var(--warn)' : undefined }}
       >
         <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>
-          {s.rootBusy ? '…' : s.rootMode ? '# root' : '$ shell'}
+          {s.rootBusy ? '…' : s.rootMode ? '# Root' : '$ Shell'}
         </span>
       </button>
       <button className="btn" onClick={refresh} title="Refresh processes, apps and files">
@@ -171,14 +172,15 @@ function DeviceBar() {
 
 export function Header() {
   const { s, set, toggleTheme } = useLoupe();
+  const session = useSession();
   return (
     <div>
       <header className="header">
         <Logo />
         <nav className="nav" aria-label="View">
-          {[['console', 'Console'], ['decompiler', 'Decompiler']].map(([v, l]) => (
+          {[['console', 'Console'], ['decompiler', 'Decompiler'], ['analyzer', 'Analyzer']].map(([v, l]) => (
             <button key={v} className={s.view === v ? 'on' : ''} aria-current={s.view === v ? 'page' : undefined}
-              onClick={() => set({ view: v })}>{l}</button>))}
+              onClick={() => set({ view: v })}>{l}{v === 'analyzer' && session.active ? <i className="az-rec-dot" title="A session is recording" /> : null}</button>))}
         </nav>
         <div className="spacer" />
         <button className="btn-icon" onClick={toggleTheme} aria-label="Toggle theme"
@@ -194,6 +196,7 @@ export function Header() {
         </button>
       </header>
       {s.view === 'console' && <DeviceBar />}
+      <SessionBar />
     </div>
   );
 }

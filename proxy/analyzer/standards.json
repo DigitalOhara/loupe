@@ -1,0 +1,979 @@
+{
+ "snapshot": "OWASP MAS index (mas.owasp.org), read 2026-10-10: MASWE-0001 to MASWE-0078 and the MASTG test list",
+ "note": "Related standards for each rule. Mapping a rule to an ID is Loupe's judgment of what it relates to. It does not mean the MASTG test was run or passed.",
+ "rules": {
+  "manifest.debuggable": {
+   "maswe": [
+    "MASWE-0063"
+   ],
+   "mastg": [
+    "MASTG-TEST-0226"
+   ],
+   "cwe": [
+    "CWE-489"
+   ]
+  },
+  "manifest.exported-components": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [
+    "MASTG-TEST-0364",
+    "MASTG-TEST-0365",
+    "MASTG-TEST-0366"
+   ],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "manifest.exported-provider": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [
+    "MASTG-TEST-0355"
+   ],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "manifest.weak-permission": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [
+    "MASTG-TEST-0024"
+   ],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "manifest.backup": {
+   "maswe": [
+    "MASWE-0006"
+   ],
+   "mastg": [
+    "MASTG-TEST-0216",
+    "MASTG-TEST-0262"
+   ],
+   "cwe": [
+    "CWE-530"
+   ]
+  },
+  "network.cleartext": {
+   "maswe": [
+    "MASWE-0026"
+   ],
+   "mastg": [
+    "MASTG-TEST-0235"
+   ],
+   "cwe": [
+    "CWE-319"
+   ]
+  },
+  "network.user-ca": {
+   "maswe": [
+    "MASWE-0027"
+   ],
+   "mastg": [
+    "MASTG-TEST-0285",
+    "MASTG-TEST-0286"
+   ],
+   "cwe": [
+    "CWE-295"
+   ]
+  },
+  "signature.verdict": {
+   "maswe": [],
+   "mastg": [
+    "MASTG-TEST-0038",
+    "MASTG-TEST-0224"
+   ],
+   "cwe": [
+    "CWE-347"
+   ]
+  },
+  "code.trust-all-tls": {
+   "maswe": [
+    "MASWE-0027"
+   ],
+   "mastg": [
+    "MASTG-TEST-0282",
+    "MASTG-TEST-0283"
+   ],
+   "cwe": [
+    "CWE-295"
+   ]
+  },
+  "code.webview-debugging": {
+   "maswe": [
+    "MASWE-0063"
+   ],
+   "mastg": [
+    "MASTG-TEST-0227"
+   ],
+   "cwe": [
+    "CWE-489"
+   ]
+  },
+  "secrets.private-material": {
+   "maswe": [
+    "MASWE-0004"
+   ],
+   "mastg": [
+    "MASTG-TEST-0212"
+   ],
+   "cwe": [
+    "CWE-798"
+   ]
+  },
+  "native.hardening": {
+   "maswe": [
+    "MASWE-0045"
+   ],
+   "mastg": [
+    "MASTG-TEST-0222",
+    "MASTG-TEST-0223"
+   ],
+   "cwe": []
+  },
+  "dyn.logcat-secrets": {
+   "maswe": [
+    "MASWE-0005"
+   ],
+   "mastg": [
+    "MASTG-TEST-0003",
+    "MASTG-TEST-0203"
+   ],
+   "cwe": [
+    "CWE-532"
+   ]
+  },
+  "dyn.crash": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-248"
+   ]
+  },
+  "dyn.cleartext-connection": {
+   "maswe": [
+    "MASWE-0026"
+   ],
+   "mastg": [
+    "MASTG-TEST-0236"
+   ],
+   "cwe": [
+    "CWE-319"
+   ]
+  },
+  "dyn.storage-secrets": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "dyn.world-readable": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-276"
+   ]
+  },
+  "dyn.external-storage": {
+   "maswe": [
+    "MASWE-0002"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "dyn.exported-reachable": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [
+    "MASTG-TEST-0364"
+   ],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "dyn.provider-query": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [
+    "MASTG-TEST-0355"
+   ],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "code.hardcoded-credential": {
+   "maswe": [
+    "MASWE-0005"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-798"
+   ]
+  },
+  "code.weak-crypto": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-327",
+    "CWE-329",
+    "CWE-321"
+   ]
+  },
+  "code.webview-js-local": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-79"
+   ]
+  },
+  "code.cleartext-url": {
+   "maswe": [
+    "MASWE-0026"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-319"
+   ]
+  },
+  "code.sensitive-logging": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-532"
+   ]
+  },
+  "code.external-storage": {
+   "maswe": [
+    "MASWE-0002"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "code.client-root-check": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": []
+  },
+  "code.sms-send": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-201"
+   ]
+  },
+  "code.no-tamper-check": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-353"
+   ]
+  },
+  "manifest.task-affinity": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-1021"
+   ]
+  },
+  "manifest.sdk-levels": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-1104"
+   ]
+  },
+  "manifest.grant-uri": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "manifest.safe-browsing-off": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": []
+  },
+  "network.expired-pins": {
+   "maswe": [
+    "MASWE-0027"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-295"
+   ]
+  },
+  "code.world-readable-file": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-276"
+   ]
+  },
+  "code.webview-settings": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-749"
+   ]
+  },
+  "code.insecure-random": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-330"
+   ]
+  },
+  "code.plaintext-token-prefs": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "code.dynamic-execution": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-94"
+   ]
+  },
+  "code.intent-safety": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-927"
+   ]
+  },
+  "code.sql-concatenation": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-89"
+   ]
+  },
+  "code.zip-slip": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-22"
+   ]
+  },
+  "code.legacy-tls": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-327"
+   ]
+  },
+  "code.fileprovider-root": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "manifest.deeplinks": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-939"
+   ]
+  },
+  "code.clipboard-write": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "code.no-flag-secure": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "code.unused-permissions": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-250"
+   ]
+  },
+  "code.keyboard-cache": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-524"
+   ]
+  },
+  "secrets.hardcoded-values": {
+   "maswe": [
+    "MASWE-0005"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-798",
+    "CWE-259"
+   ]
+  },
+  "secrets.binary-strings": {
+   "maswe": [
+    "MASWE-0005"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-798",
+    "CWE-321"
+   ]
+  },
+  "code.path-traversal": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-22",
+    "CWE-73"
+   ]
+  },
+  "code.unsafe-deserialization": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-502"
+   ]
+  },
+  "code.weak-host-check": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-20",
+    "CWE-601"
+   ]
+  },
+  "code.link-parameter-to-url": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-918",
+    "CWE-601"
+   ]
+  },
+  "code.untrusted-result-uri": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-610"
+   ]
+  },
+  "code.secret-in-url": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-598"
+   ]
+  },
+  "code.serializable-native-pointer": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-415",
+    "CWE-502"
+   ]
+  },
+  "code.encoded-constant": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-798",
+    "CWE-656"
+   ]
+  },
+  "code.xxe": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-611"
+   ]
+  },
+  "code.fragment-injection": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-470"
+   ]
+  },
+  "code.biometric-keystore": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-287",
+    "CWE-288"
+   ]
+  },
+  "code.sensitive-notification": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "code.device-identifiers": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-359"
+   ]
+  },
+  "code.insecure-bluetooth": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-306",
+    "CWE-319"
+   ]
+  },
+  "code.local-server": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-1327"
+   ]
+  },
+  "code.debug-leftovers": {
+   "maswe": [
+    "MASWE-0063"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-489",
+    "CWE-615"
+   ]
+  },
+  "code.no-tapjacking-protection": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-1021"
+   ]
+  },
+  "network.no-pinning": {
+   "maswe": [
+    "MASWE-0027"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-295"
+   ]
+  },
+  "code.oauth-pkce": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-287",
+    "CWE-522"
+   ]
+  },
+  "code.no-anti-debug": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-693"
+   ]
+  },
+  "privacy.trackers": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-359"
+   ]
+  },
+  "manifest.risky-attributes": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-489",
+    "CWE-276",
+    "CWE-1021"
+   ]
+  },
+  "package.leftover-files": {
+   "maswe": [
+    "MASWE-0005"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-321",
+    "CWE-540"
+   ]
+  },
+  "network.cordova-allowlist": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-942"
+   ]
+  },
+  "dyn.listening-port": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-1327",
+    "CWE-306"
+   ]
+  },
+  "dyn.webview-devtools": {
+   "maswe": [
+    "MASWE-0063"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-489"
+   ]
+  },
+  "dyn.notification-secrets": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "dyn.plaintext-database": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "dyn.provider-injection": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-89",
+    "CWE-22"
+   ]
+  },
+  "code.clipboard-read": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "code.deprecated-security-api": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-477"
+   ]
+  },
+  "code.passkey-weak-config": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-287",
+    "CWE-294"
+   ]
+  },
+  "code.temp-file-write": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-377"
+   ]
+  },
+  "code.timing-unsafe-compare": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-208"
+   ]
+  },
+  "code.stack-trace-leak": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-209"
+   ]
+  },
+  "code.malware-indicators": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-506"
+   ]
+  },
+  "code.compose-saved-secret": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "manifest.sensitive-services": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-250",
+    "CWE-269"
+   ]
+  },
+  "manifest.android14-requirements": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-1104"
+   ]
+  },
+  "package.protector": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-693"
+   ]
+  },
+  "package.hybrid-web": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-79",
+    "CWE-95",
+    "CWE-942"
+   ]
+  },
+  "package.react-native": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "package.flutter": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "package.unity": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-312"
+   ]
+  },
+  "package.dotnet": {
+   "maswe": [
+    "MASWE-0027"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-295",
+    "CWE-312"
+   ]
+  },
+  "code.no-obfuscation": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-656"
+   ]
+  },
+  "native.strings": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-319",
+    "CWE-327"
+   ]
+  },
+  "privacy.sdk-inventory": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-1104"
+   ]
+  },
+  "dyn.exported-service": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "dyn.exported-receiver": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-926"
+   ]
+  },
+  "dyn.provider-write": {
+   "maswe": [
+    "MASWE-0018"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-926",
+    "CWE-284"
+   ]
+  },
+  "dyn.key-files": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-321",
+    "CWE-312"
+   ]
+  },
+  "dyn.log-stack-trace": {
+   "maswe": [
+    "MASWE-0001"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-209",
+    "CWE-532"
+   ]
+  },
+  "dyn.app-links": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-939"
+   ]
+  },
+  "dyn.flag-secure": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "dyn.package-flags": {
+   "maswe": [
+    "MASWE-0063"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-489"
+   ]
+  },
+  "dyn.work-profile": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "signature.algorithm": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-327",
+    "CWE-326"
+   ]
+  },
+  "code.no-root-detection": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-693"
+   ]
+  },
+  "code.partial-obfuscation": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-656"
+   ]
+  },
+  "code.key-reuse": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-323",
+    "CWE-327"
+   ]
+  },
+  "code.copy-paste-allowed": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-200"
+   ]
+  },
+  "dyn.granted-permissions": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-250"
+   ]
+  },
+  "code.sql-from-variable": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-89"
+   ]
+  },
+  "code.download-mobile-only": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-319"
+   ]
+  }
+ }
+}
