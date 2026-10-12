@@ -5,7 +5,7 @@
  * the user declined is `not_tested` with the reason, never `checked`.
  */
 import crypto from 'node:crypto';
-import { finding } from './evidence.js';
+import { finding, isLocalHost } from './evidence.js';
 import { cleanOutcome, str } from './outcome.js';
 import { sensitive } from './redact.js';
 import { standardsFor, SNAPSHOT } from './standards.js';
@@ -31,7 +31,7 @@ export function cleanRecording(raw) {
     pids: arr(r.pids, 50).map(num),
     logcat: arr(r.logcat, CAP.logcat).map((e) => ({ t: num(e?.t), pid: num(e?.pid), level: str(e?.level, 1), tag: str(e?.tag, 80), msg: str(e?.msg, CAP.line) })),
     sockets: arr(r.sockets, CAP.sockets).map((s) => ({ t: num(s?.t), remote: str(s?.remote, 80), state: str(s?.state, 16) })),
-    steps: arr(r.steps, CAP.steps).map((s) => ({ t: num(s?.t), kind: ['launch', 'activity', 'deeplink', 'provider', 'sqli', 'traversal', 'fuzz', 'service', 'receiver', 'insert', 'update', 'delete', 'window'].includes(s?.kind) ? s.kind : 'launch', target: str(s?.target, 300), cmd: str(s?.cmd, 400), output: str(s?.output, 4000) })),
+    steps: arr(r.steps, CAP.steps).map((s) => ({ t: num(s?.t), kind: ['launch', 'activity', 'deeplink', 'provider', 'sqli', 'traversal', 'fuzz', 'service', 'receiver', 'insert', 'update', 'delete', 'window', 'window-end'].includes(s?.kind) ? s.kind : 'launch', target: str(s?.target, 300), cmd: str(s?.cmd, 400), output: str(s?.output, 4000) })),
     fs: r.fs && typeof r.fs === 'object' ? { error: str(r.fs.error, 200), before: files(r.fs.before), after: files(r.fs.after), matches: arr(r.fs.matches, 200).map((m) => ({ needle: num(m?.needle), path: str(m?.path, 400) })), sqlite: arr(r.fs.sqlite, 200).map((x) => str(x, 400)).filter(Boolean) } : null,
     ext: Array.isArray(r.ext) ? { files: files(r.ext) } : null,
     devtools: Array.isArray(r.devtools) ? arr(r.devtools, 50).map((x) => str(x, 200)) : null,
@@ -58,12 +58,32 @@ const logcatSecrets = {
         if (seen.has(key) || findings.length >= 50) continue;
         seen.add(key);
         findings.push(finding('dyn.logcat-secrets', {
-          key, title: `${h.label} in logcat (${e.tag})`, severity: 'high', detection: h.exact ? 'exact' : 'probable', conclusion: 'confirmed',
+          key, title: `${h.label} in logcat (${e.tag})`, severity: 'medium', detection: h.exact ? 'exact' : 'probable', conclusion: 'confirmed',
           summary: `The app wrote ${h.label.toLowerCase()} to the system log. Anyone with adb, and other apps on older Android versions, can read it.`,
           evidence: [{ kind: 'logcat', ref: { path: 'logcat', startLine: i + 1, endLine: i + 1, hitLine: i + 1 }, excerpt: logLine(e, off), note: `pid ${e.pid}` }],
           repro: { steps: ['Start a session and repeat the action that logged this.', 'Run the command and search for the tag.'], command: ['adb', 'logcat', '-d', '-s', e.tag.replace(/[^\w.-]/g, '')] }
         }));
       }
+    });
+    return { findings };
+  }
+};
+
+const logUrls = {
+  id: 'dyn.logcat-http-url', title: 'Plain HTTP address seen in the log', category: 'NETWORK', needs: ['logcat'],
+  run(rec) {
+    const pids = new Set(rec.pids), off = rec.device.clockOffsetMs, seen = new Set(), findings = [];
+    rec.logcat.forEach((e, i) => {
+      if (!pids.has(e.pid)) return;
+      const host = /\bhttp:\/\/([A-Za-z0-9.-]+)/.exec(e.msg)?.[1];
+      if (!host || isLocalHost(host) || seen.has(host) || findings.length >= 20) return;
+      seen.add(host);
+      findings.push(finding('dyn.logcat-http-url', {
+        key: host, title: `Plain HTTP address in the log: ${host}`, severity: 'low', detection: 'heuristic', conclusion: 'exposure',
+        summary: `The app's log mentions http://${host}, which has no TLS. If the app really sent a request there, a network attacker can read and change that traffic. A log line that only names an address is not proof of a request, so confirm it in a proxy.`,
+        evidence: [{ kind: 'logcat', ref: { path: 'logcat', startLine: i + 1, endLine: i + 1, hitLine: i + 1 }, excerpt: logLine(e, off), note: `pid ${e.pid}` }],
+        repro: { steps: ['Start a session and repeat the action, then search the log for the host.'], command: ['adb', 'logcat', '-d', '-s', e.tag.replace(/[^\w.-]/g, '')] }
+      }));
     });
     return { findings };
   }
@@ -81,7 +101,7 @@ const crash = {
       const lines = [];
       for (let j = i; j < rec.logcat.length && lines.length < 8 && rec.logcat[j].tag === 'AndroidRuntime'; j++) lines.push(logLine(rec.logcat[j], off));
       findings.push(finding('dyn.crash', {
-        key: st.target, title: `Crash when starting ${st.target.split('/').pop()}`, severity: 'medium', detection: 'exact', conclusion: 'exposure',
+        key: st.target, title: `Crash when starting ${st.target.split('/').pop()}`, severity: 'low', detection: 'exact', conclusion: 'exposure',
         summary: st.kind === 'fuzz' ? `Starting ${st.target} with malformed extras (format strings, a huge number, a file URI, a null) crashed the app. Another app can send the same Intent, which is a denial of service and shows the component does not check its input.` : `Starting ${st.target} crashed the app. Another app can do the same, which is a denial of service and may point to unchecked input.`,
         evidence: [{ kind: 'logcat', ref: { path: 'logcat', startLine: i + 1, endLine: i + lines.length, hitLine: i + 1 }, excerpt: lines.join('\n'), note: st.cmd }],
         repro: { steps: ['Run the command with the app installed.'], command: probeCmd(st) }
@@ -129,7 +149,7 @@ const storageSecrets = {
       seen.add(key);
       const line = text ? (text.split('\n').find((l) => l.includes(h.value)) || '').slice(0, 240) : '(binary file, matched by search)';
       findings.push(finding('dyn.storage-secrets', {
-        key, title: `${h.label} in ${path.split('/').pop()}`, severity: 'high', detection: h.exact ? 'exact' : 'probable', conclusion: 'confirmed',
+        key, title: `${h.label} in ${path.split('/').pop()}`, severity: 'medium', detection: h.exact ? 'exact' : 'probable', conclusion: 'confirmed',
         summary: `${h.label} is stored in ${path} (${st}) without encryption. Anyone who can read the app's data (a debuggable build, a backup, a rooted device) can read it.`,
         evidence: [{ kind: 'file-diff', ref: { path, startLine: null, endLine: null, hitLine: null }, excerpt: `${st === 'unchanged' ? ' ' : '+'} ${line}`, note: st }],
         repro: { steps: ['Use the app so it saves this data, then run the command.'], command: rec.caps.appdata === 'run-as' ? ['adb', 'shell', 'run-as', rec.pkg, 'cat', path.replace(/^\.\//, '')] : [] }
@@ -252,7 +272,7 @@ const devtools = {
     const mine = rec.devtools.filter((n) => rec.pids.some((p) => n === `webview_devtools_remote_${p}`) || n === `${rec.pkg}_devtools_remote`);
     if (!mine.length) return { findings: [] };
     return { findings: [finding('dyn.webview-devtools', {
-      key: rec.pkg, severity: 'medium', detection: 'exact', conclusion: 'confirmed',
+      key: rec.pkg, severity: 'low', detection: 'exact', conclusion: 'confirmed',
       summary: `The app has a WebView debugging socket open (${mine.join(', ')}). Anyone with adb can attach Chrome DevTools to its WebViews and read or change the pages, cookies and storage.`,
       evidence: [{ kind: 'command', ref: { path: '/proc/net/unix', startLine: null, endLine: null, hitLine: null }, excerpt: mine.map((n) => `@${n}`).join('\n'), focus: mine[0], note: '' }],
       repro: { steps: ['Open chrome://inspect on a computer with the phone plugged in.'], command: ['adb', 'forward', 'tcp:9222', `localabstract:${mine[0]}`] }
@@ -275,7 +295,7 @@ const notifications = {
       const label = hits[0]?.label || (OTP.test(v[1]) && 'A one-time code');
       if (!label || findings.some((f) => f.key === label)) continue;
       findings.push(finding('dyn.notification-secrets', {
-        key: label, title: `${label} in a notification`, severity: 'medium', detection: hits[0]?.exact ? 'exact' : 'probable', conclusion: 'confirmed',
+        key: label, title: `${label} in a notification`, severity: 'low', detection: hits[0]?.exact ? 'exact' : 'probable', conclusion: 'confirmed',
         summary: `A notification from the app shows ${label.toLowerCase()}. Notifications can appear on the lock screen and are readable by any app with notification access.`,
         evidence: [{ kind: 'command', ref: { path: 'dumpsys notification', startLine: null, endLine: null, hitLine: null }, excerpt: line.trim().slice(0, 240), focus: hits[0]?.value || '', note: 'notifications showing when the session stopped' }],
         repro: { steps: ['Trigger the notification and look at the lock screen.'], command: ['adb', 'shell', 'dumpsys', 'notification', '--noredact'] }
@@ -416,7 +436,7 @@ const appLinks = {
     for (const m of rec.appLinks.matchAll(/^\s*([\w.*-]+\.[\w.-]+):\s*(\S+)/gm)) {
       const [, host, state] = m;
       if (/^(?:verified|approved)$/i.test(state) || findings.some((f) => f.key === host) || findings.length >= 20) continue;
-      findings.push(finding('dyn.app-links', { key: host, title: `Link not verified: ${host}`, severity: 'medium', detection: 'exact', conclusion: 'confirmed',
+      findings.push(finding('dyn.app-links', { key: host, title: `Link not verified: ${host}`, severity: 'low', detection: 'exact', conclusion: 'confirmed',
         summary: `Android reports the domain ${host} as ${state} for this app, not verified. A link to that host opens the app chooser, or goes to another app that claims the host. The link then cannot be trusted to reach this app.`,
         evidence: [{ kind: 'command', ref: { path: 'pm get-app-links', startLine: null, endLine: null, hitLine: null }, excerpt: m[0].trim(), focus: host, note: 'read when the session stopped' }],
         repro: { steps: ['Run the command and read the state of each domain.'], command: ['adb', 'shell', 'pm', 'get-app-links', rec.pkg] } }));
@@ -439,13 +459,35 @@ const flagSecure = {
   }
 };
 
+// What an app logs when it notices root. Whole phrases only: a stray "root" (a root cause, a root view) is not a reaction.
+const ROOT_LOG = /\b(?:device|phone|system)\s+(?:is\s+)?rooted\b|\brooted\s+(?:device|phone)\b|\broot(?:ed)?\s+(?:detected|found|access detected|check failed)\b|\bsu\s+binary\b|magisk|superuser\.apk|\btamper(?:ed|ing)?\s+(?:detected|check)|\bcompromised\s+(?:device|environment)\b/i;
+const NOT_ROOTED = /\b(?:not|isn't|no)\s+(?:\w+\s+)?rooted\b/i;
+const rootReaction = {
+  id: 'dyn.root-reaction', title: 'App ignores a rooted phone', category: 'RESILIENCE', group: 'changing', needs: ['logcat', 'root'],
+  run(rec) {
+    const st = rec.steps.find((s) => s.kind === 'window'), end = rec.steps.find((s) => s.kind === 'window-end');
+    if (!st) return { notApplicable: 'the app was not launched from adb in this session' };
+    const off = rec.device.clockOffsetMs, pids = new Set(rec.pids);
+    if (rec.endedAt - st.t < 5000) return { inconclusive: 'the session ended less than five seconds after the launch, which is too short for the app to react' };
+    const noticed = rec.logcat.some((e) => pids.has(e.pid) && e.t + off >= st.t && !/^(ViewRootImpl|chromium|cr_\w*)$/.test(e.tag) && ROOT_LOG.test(`${e.tag} ${e.msg}`) && !NOT_ROOTED.test(e.msg));
+    if (!end) return { inconclusive: 'the app\'s window was not read again at the end of the session, so whether it stayed open is unknown' };
+    // A log line shows the app noticed root, not that it did anything about it, and a missing window at the end can be the user, a crash or the app. Nothing here proves a reaction, so this is never reported as checked.
+    if (noticed) return { inconclusive: /fl=/.test(end.output) ? 'the app logged a message about root and its window stayed open, so whether it blocked or limited anything is unknown' : 'the app logged a message about root and its window was gone at the end, which can mean it exited because of root, or that the user left or the app crashed' };
+    if (!/fl=/.test(st.output) || !/fl=/.test(end.output)) return { inconclusive: 'the app had no window at the launch or at the end of the session, so it may have closed on root, been closed by the user or crashed' };
+    return { findings: [finding('dyn.root-reaction', { key: rec.pkg, severity: 'low', detection: 'heuristic', conclusion: 'weakness',
+      summary: 'The app was launched on a rooted phone. Its window was open after the launch and again at the end of the session, and none of its log lines mention root, Magisk, tampering or a compromised device. It may not check for root, or it may check later or react quietly, for example by switching off features, and a root hider such as the Magisk DenyList looks the same.',
+      evidence: [{ kind: 'command', ref: { path: 'dumpsys window', startLine: null, endLine: null, hitLine: null }, excerpt: end.output.split('\n').slice(0, 3).join('\n'), focus: 'fl=', note: `at ${hhmmss(end.t)}, phone rooted` }],
+      repro: { steps: ['Run the app on a rooted phone without a root hider and see whether it warns, exits or turns features off.'], command: [] } })] };
+  }
+};
+
 const packageFlags = {
   id: 'dyn.package-flags', title: 'Installed build flags confirm weak settings', category: 'RESILIENCE', needs: ['pkgdump'],
   run(rec) {
     const findings = [];
     for (const [re, label, sev, text] of [
       [/\bDEBUGGABLE\b/, 'Installed build is debuggable', 'high', 'The package manager lists the installed app as DEBUGGABLE. Anyone with adb can attach a debugger and read its private data without root. This confirms the manifest setting on the phone.'],
-      [/\bTEST_ONLY\b/, 'Installed build is test-only', 'medium', 'The package manager lists the installed app as TEST_ONLY. It is a test build that was installed with adb install -t and was never meant for users. It may carry debug code and weaker checks.'],
+      [/\bTEST_ONLY\b/, 'Installed build is test-only', 'low', 'The package manager lists the installed app as TEST_ONLY. It is a test build that was installed with adb install -t and was never meant for users. It may carry debug code and weaker checks.'],
       [/\bALLOW_BACKUP\b/, 'Backups are on for the installed build', 'low', 'The package manager lists ALLOW_BACKUP for the installed app, so its data is included in device backups. Anyone who can pull a backup, through adb on a debuggable build or from the cloud account, can read what the app stored.']
     ]) { const m = re.exec(rec.pkgDump); if (m) findings.push(finding('dyn.package-flags', { key: label, title: label, severity: sev, detection: 'exact', conclusion: 'confirmed', summary: text,
       evidence: [{ kind: 'command', ref: { path: 'dumpsys package', startLine: null, endLine: null, hitLine: null }, excerpt: rec.pkgDump.split('\n').filter((l) => re.test(l)).join('\n').slice(0, 300), focus: m[0], note: 'read when the session stopped' }],
@@ -472,14 +514,14 @@ const grantedPermissions = {
   run(rec) {
     const granted = [...new Set([...rec.pkgDump.matchAll(/android\.permission\.([A-Z_]+): granted=true/g)].map((m) => m[1]).filter((p) => DANGEROUS.has(p)))];
     if (!granted.length) return { findings: [] };
-    return { findings: [finding('dyn.granted-permissions', { key: rec.pkg, title: `${granted.length} dangerous permission${granted.length === 1 ? '' : 's'} granted`, severity: 'info', detection: 'exact', conclusion: 'exposure',
+    return { findings: [finding('dyn.granted-permissions', { key: rec.pkg, title: `${granted.length} dangerous permission${granted.length === 1 ? '' : 's'} granted`, severity: 'low', detection: 'exact', conclusion: 'exposure',
       summary: `The phone shows these dangerous permissions as granted to the app: ${granted.join(', ')}. Each gives the app, and any code or flaw inside it, access to sensitive data or sensors. Permissions the app does not need to function widen what a compromise can reach.`,
       evidence: [{ kind: 'command', ref: { path: 'dumpsys package', startLine: null, endLine: null, hitLine: null }, excerpt: granted.map((g) => `android.permission.${g}: granted=true`).join('\n').slice(0, 400), note: 'read when the session stopped' }],
       repro: { steps: ['Run the command and read the granted permissions.'], command: ['adb', 'shell', 'dumpsys', 'package', rec.pkg] } })] };
   }
 };
 
-export const DYN_RULES = [logcatSecrets, crash, cleartext, storageSecrets, worldReadable, externalStorage, exportedReachable, providerQuery, listening, devtools, notifications, plainDb, providerInjection, exportedService, exportedReceiver, providerWrite, keyFiles, logStackTrace, appLinks, flagSecure, packageFlags, workProfile, grantedPermissions];
+export const DYN_RULES = [logcatSecrets, logUrls, crash, cleartext, storageSecrets, worldReadable, externalStorage, exportedReachable, providerQuery, listening, devtools, notifications, plainDb, providerInjection, exportedService, exportedReceiver, providerWrite, keyFiles, logStackTrace, appLinks, flagSecure, rootReaction, packageFlags, workProfile, grantedPermissions];
 
 // What a rule could not see even though its capability was there: events dropped at a cap, a stream that ended early, files not listed.
 const INCOMPLETE = {
@@ -499,7 +541,8 @@ const CAPS = {
   notifications: ['notifications-unreadable', (r) => r.notifications !== null],
   applinks: ['app-links-unreadable', (r) => r.appLinks !== null],
   pkgdump: ['package-flags-unreadable', (r) => r.pkgDump !== null],
-  profile: ['work-profile-unreadable', (r) => r.workProfile !== null]
+  profile: ['work-profile-unreadable', (r) => r.workProfile !== null],
+  root: ['phone-not-rooted', (r) => !!r.caps.root]
 };
 
 /** One outcome per rule that did not find anything, one per finding otherwise. Never throws: a rule that fails is an `error` outcome. */

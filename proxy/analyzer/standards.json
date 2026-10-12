@@ -901,6 +901,13 @@
     "CWE-200"
    ]
   },
+  "dyn.root-reaction": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-693"
+   ]
+  },
   "dyn.package-flags": {
    "maswe": [
     "MASWE-0063"
@@ -969,6 +976,57 @@
    ]
   },
   "code.download-mobile-only": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-319"
+   ]
+  },
+  "network.single-pin": {
+   "maswe": [
+    "MASWE-0047"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-295"
+   ]
+  },
+  "package.vulnerable-libraries": {
+   "maswe": [
+    "MASWE-0076"
+   ],
+   "mastg": [],
+   "cwe": [
+    "CWE-1395"
+   ]
+  },
+  "package.unity-intent": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-114"
+   ]
+  },
+  "code.logout-keeps-session": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-613"
+   ]
+  },
+  "code.jwt-misuse": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": [
+    "CWE-347"
+   ]
+  },
+  "network.endpoint-inventory": {
+   "maswe": [],
+   "mastg": [],
+   "cwe": []
+  },
+  "dyn.logcat-http-url": {
    "maswe": [],
    "mastg": [],
    "cwe": [

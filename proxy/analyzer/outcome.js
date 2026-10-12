@@ -6,7 +6,7 @@
 import crypto from 'node:crypto';
 
 export const STATES = ['finding', 'inconclusive', 'checked', 'not_tested', 'not_applicable', 'error'];
-export const SEVERITIES = ['high', 'medium', 'low', 'info'];
+export const SEVERITIES = ['high', 'medium', 'low'];
 export const DETECTIONS = ['exact', 'probable', 'heuristic'];
 export const CONCLUSIONS = ['exposure', 'weakness', 'confirmed'];
 export const EVIDENCE_KINDS = ['manifest', 'resource', 'source', 'signature', 'native', 'logcat', 'file-diff', 'command'];

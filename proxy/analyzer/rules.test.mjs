@@ -90,7 +90,7 @@ test('a missing or broken network security config is inconclusive, not clean', a
 test('user CA trust: explicit config, old target SDK, and the safe default', async () => {
   const mf = (t) => manifest({ app: 'android:networkSecurityConfig="@xml/nsc"', sdk: `<uses-sdk android:targetSdkVersion="${t}"/>` });
   const user = await scan({ 'resources/AndroidManifest.xml': mf(30), 'resources/res/xml/nsc.xml': '<network-security-config><base-config><trust-anchors><certificates src="user"/></trust-anchors></base-config></network-security-config>' });
-  assert.equal(one(user, 'network.user-ca').severity, 'medium');
+  assert.equal(one(user, 'network.user-ca').severity, 'low');
   const debugOnly = await scan({ 'resources/AndroidManifest.xml': mf(30), 'resources/res/xml/nsc.xml': '<network-security-config><debug-overrides><trust-anchors><certificates src="user"/></trust-anchors></debug-overrides></network-security-config>' });
   assert.equal(one(debugOnly, 'network.user-ca').state, 'checked');
   const old = await scan({ 'resources/AndroidManifest.xml': manifest({ sdk: '<uses-sdk android:targetSdkVersion="23"/>' }) });
@@ -128,7 +128,7 @@ test('secrets are found and shown in the evidence, and a bare PEM marker is not 
   assert.equal(of(marker, 'secrets.private-material').filter((o) => o.state === 'finding').length, 0);          // code that strips the markers holds no key
 });
 
-test('trust-all TLS: app code is high, library code is medium', async () => {
+test('trust-all TLS: app code is high, library code is low', async () => {
   const empty = 'class T implements X509TrustManager { public void checkServerTrusted(X509Certificate[] c, String s) throws CertificateException {\n    } }';
   const out = await scan({
     'resources/AndroidManifest.xml': manifest(),
@@ -138,7 +138,7 @@ test('trust-all TLS: app code is high, library code is medium', async () => {
   });
   const f = of(out, 'code.trust-all-tls');
   assert.equal(f.length, 3);
-  assert.deepEqual(f.map((x) => x.severity).sort(), ['high', 'high', 'medium']);
+  assert.deepEqual(f.map((x) => x.severity).sort(), ['high', 'high', 'low']);
 });
 
 test('an inverted debug guard is still reported', async () => {
@@ -569,7 +569,7 @@ test('checks from the web and skills research: manifest switches, NSC overrides,
   const t = (id) => of(out, id).filter((o) => o.state === 'finding').map((o) => o.title);
   assert.deepEqual(t('manifest.risky-attributes').sort(), ['Dialer secret code: Code', 'Legacy external storage', 'Test-only build']);
   const ca = of(out, 'network.user-ca').find((o) => o.state === 'finding');
-  assert.equal(ca.severity, 'high');                                                       // debug-overrides count when debuggable, and overridePins skips pinning
+  assert.equal(ca.severity, 'low');                                                        // debug-overrides count when debuggable; trusting user CAs is hardening, so it stays low
   assert.deepEqual(t('package.leftover-files').map((x) => x.split(':')[0]).sort(), ['JavaScript source map', 'Keystore or private key file']);
   assert.equal(t('network.cordova-allowlist').length, 1);
   assert.deepEqual(t('privacy.trackers'), ['Trackers: AppsFlyer']);
@@ -606,7 +606,7 @@ test('DragonJAR round, code checks: clipboard reads, deprecated security APIs, p
   for (const id of ['code.timing-unsafe-compare', 'code.passkey-weak-config', 'code.biometric-keystore']) assert.equal(of(quiet, id).filter((o) => o.state === 'finding').length, 0, id);
 });
 
-test('DragonJAR round, manifest: accessibility, notification listener, device admin, boot, SMS priority, cross profile, Android 14', async () => {
+test('DragonJAR round, manifest: accessibility, notification listener, device admin, SMS priority, cross profile, Android 14', async () => {
   const body = `<service android:name=".Acc" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"/>
     <service android:name=".Nl" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true"/>
     <receiver android:name=".Adm" android:permission="android.permission.BIND_DEVICE_ADMIN"/>
@@ -616,7 +616,7 @@ test('DragonJAR round, manifest: accessibility, notification listener, device ad
     <activity android:name=".Noact" android:exported="true"><intent-filter><category android:name="android.intent.category.DEFAULT"/></intent-filter></activity>`;
   const out = await scan({ 'resources/AndroidManifest.xml': manifest({ app: 'android:crossProfile="true"', body, top: '<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>', sdk: '<uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34"/>' }) });
   const t = (id) => of(out, id).filter((o) => o.state === 'finding').map((o) => o.title.split(':')[0]);
-  assert.deepEqual(t('manifest.sensitive-services').sort(), ['Accessibility service', 'Cross-profile access', 'Device administrator', 'Notification listener', 'SMS receiver with raised priority', 'Starts at boot']);
+  assert.deepEqual(t('manifest.sensitive-services').sort(), ['Accessibility service', 'Cross-profile access', 'Device administrator', 'Notification listener', 'SMS receiver with raised priority']);
   assert.deepEqual(t('manifest.android14-requirements').sort(), ['Intent filter without an action', 'Service without foregroundServiceType']);
   const quiet = await scan({ 'resources/AndroidManifest.xml': manifest({ sdk: '<uses-sdk android:targetSdkVersion="34"/>', body: '<receiver android:name=".Sms" android:exported="true"><intent-filter><action android:name="android.provider.Telephony.SMS_RECEIVED"/></intent-filter></receiver>' }) });
   assert.equal(of(quiet, 'manifest.sensitive-services').filter((o) => o.state === 'finding').length, 0);
@@ -712,4 +712,114 @@ test('a damaged class in a library does not make rules inconclusive, but one in 
   assert.equal(one(own, 'code.world-readable-file').state, 'inconclusive');
   const mergedLib = await scan({ 'resources/AndroidManifest.xml': manifest({ body: `${main}<activity android:name="org.lib.Other" android:exported="false"/>` }), 'sources/com/x/app/Main.java': 'class Main {}', 'sources/org/lib/B.java': broken });
   assert.equal(one(mergedLib, 'code.world-readable-file').state, 'checked');                    // a library's manifest entry does not make it app code
+});
+
+test('checklist round, manifest and package: single pin, overlay permission, embedded databases, vulnerable libraries, Unity intent', async () => {
+  const mf = (body, top = '') => ({ 'resources/AndroidManifest.xml': manifest({ app: 'android:networkSecurityConfig="@xml/nsc"', body, top }) });
+  const nsc = (pins) => ({ 'resources/res/xml/nsc.xml': `<network-security-config><domain-config><domain>a.com</domain><pin-set>${pins}</pin-set></domain-config></network-security-config>` });
+  const one1 = await scan({ ...mf(''), ...nsc('<pin digest="SHA-256">x</pin>') });
+  assert.deepEqual([one(one1, 'network.single-pin').state, one(one1, 'network.single-pin').severity], ['finding', 'low']);
+  const two = await scan({ ...mf(''), ...nsc('<pin digest="SHA-256">x</pin><pin digest="SHA-256">y</pin>') });
+  assert.equal(one(two, 'network.single-pin').state, 'checked');
+
+  const ov = await scan(mf('', '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>'));
+  assert.ok(of(ov, 'manifest.sensitive-services').some((o) => o.state === 'finding' && /Draws over other apps/.test(o.title) && o.severity === 'low'));
+
+  const files = mf('');
+  const dbs = await scan(files, { input: openInput(entry(files, zipStored({ 'assets/seed.db': 'x', 'res/raw/cache.sqlite': 'x', 'assets/readme.txt': 'x' }))) });
+  assert.deepEqual(of(dbs, 'package.leftover-files').filter((o) => o.state === 'finding').map((o) => o.title).sort(), ['Database file in the APK: cache.sqlite', 'Database file in the APK: seed.db']);
+
+  const libs = await scan(files, { input: openInput(entry(files, zipStored({
+    'META-INF/maven/com.google.code.gson/gson/pom.properties': 'groupId=com.google.code.gson\nartifactId=gson\nversion=2.8.5\n',
+    'META-INF/com.google.android.play_core.version': '1.6.0',
+    'META-INF/maven/org.apache.commons/commons-text/pom.properties': 'version=1.10.0\n',
+    'META-INF/maven/org.apache.logging.log4j/log4j-core/pom.properties': 'version=2.17.1\n' }))) });
+  const log4j = async (v) => one(await scan(files, { input: openInput(entry(files, zipStored({ 'META-INF/maven/org.apache.logging.log4j/log4j-core/pom.properties': `version=${v}\n` }))) }), 'package.vulnerable-libraries').state;
+  assert.deepEqual([await log4j('2.12.4'), await log4j('2.3.2'), await log4j('2.18.0'), await log4j('2.12.3'), await log4j('2.14.1'), await log4j('2.3.1')], ['checked', 'checked', 'checked', 'finding', 'finding', 'finding']);   // fixes for the older branches count
+  assert.deepEqual(of(libs, 'package.vulnerable-libraries').filter((o) => o.state === 'finding').map((o) => [o.title, o.severity]).sort(),
+    [['Library with a known flaw: core 1.6.0', 'medium'], ['Library with a known flaw: gson 2.8.5', 'low']]);              // commons-text 1.10.0 and log4j 2.17.1 are the fixed versions
+  const fine = await scan(files, { input: openInput(entry(files, zipStored({ 'META-INF/maven/com.google.code.gson/gson/pom.properties': 'version=2.10.1\n' }))) });
+  assert.equal(one(fine, 'package.vulnerable-libraries').state, 'checked');
+  const none = await scan(files, { input: openInput(entry(files, zipStored({ 'classes.dex': 'x' }))) });
+  assert.equal(one(none, 'package.vulnerable-libraries').state, 'inconclusive');                                                    // no version files: nothing was read
+  const bad = await scan(files, { input: openInput(entry(files, zipStored({ 'META-INF/maven/com.google.code.gson/gson/pom.properties': 'artifactId=gson\n' }))) });
+  assert.equal(one(bad, 'package.vulnerable-libraries').state, 'inconclusive');                                                     // a listed library whose version cannot be read
+
+  const unityMf = { 'resources/AndroidManifest.xml': manifest({ body: '<activity android:name="com.unity3d.player.UnityPlayerActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>' }) };
+  const unity = await scan(unityMf, { input: openInput(entry(unityMf, zipStored({ 'lib/arm64-v8a/libunity.so': 'x' }))) });
+  assert.equal(one(unity, 'package.unity-intent').state, 'inconclusive');                                                     // the Unity version is not readable, so a patched build cannot be told apart
+  assert.equal(one(await scan(files, { input: openInput(entry(files, zipStored({ 'classes.dex': 'x' }))) }), 'package.unity-intent').state, 'not_applicable');
+});
+
+test('checklist round, code: upload names, binders, results, commands, debug endpoints, SafetyNet, update libraries, JWT, logout, keyboards, TLS, endpoints', async () => {
+  const app = 'sources/com/x/app/';
+  const files = {
+    'resources/AndroidManifest.xml': manifest(),
+    [`${app}A.java`]: 'class A { void a(Activity act, URLConnection c, java.io.File dir, String q) { String n = c.getHeaderField("Content-Disposition"); new File(dir, n); act.setResult(-1, new Intent().putExtra("auth_token", q)); Runtime.getRuntime().exec("ls " + q); UUID u = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb"); BluetoothAdapter b; String s = "https://api.corp-example.io/actuator/env"; String g = "https://api.corp-example.io/graphql"; SafetyNetApi.attest(null, null); CodePush.start(); } }',
+    [`${app}S.java`]: 'class S extends Service { public IBinder onBind(Intent i) { return new Binder(); } }',
+    [`${app}J.java`]: 'class J { void f(String q) { Jwts.parser().parse(q); JWT.decode(q); Algorithm.HMAC256("supersecretvalue"); Algorithm none = Algorithm.none(); } }',
+    [`${app}L.java`]: 'class L { void logout() { token = null; } }',
+    [`${app}K.java`]: 'class K { void f(EditText passwordField) { passwordField.setInputType(InputType.TYPE_CLASS_TEXT); } void g() { OutlinedTextField(value = v, onValueChange = {}, label = { Text("Password") }) } }',
+    [`${app}T.java`]: 'class T implements X509TrustManager { public void checkServerTrusted(X509Certificate[] c, String a) { try { v(c); } catch (Exception e) { } } void f(HttpsURLConnection h) { h.setHostnameVerifier((x, y) -> true); } }'
+  };
+  const out = await scan(files);
+  const t = (id) => of(out, id).filter((o) => o.state === 'finding').map((o) => o.title.split(':')[0]).sort();
+  assert.ok(t('code.path-traversal').includes('Remote file name used as a path'));
+  assert.deepEqual(t('code.intent-safety').filter((x) => /binder|result/.test(x)), ['Service returns a binder without a caller check', 'Token returned in an activity result']);
+  assert.ok(t('code.dynamic-execution').includes('OS command built from a string') && t('code.dynamic-execution').includes('Over-the-air code update library'));
+  assert.ok(!t('code.dynamic-execution').includes('OS command execution'));                              // the concatenated call is reported once, at the higher rating
+  assert.deepEqual(t('code.debug-leftovers'), ['Debug or admin endpoint']);
+  assert.ok(t('code.deprecated-security-api').includes('SafetyNet Attestation'));
+  assert.deepEqual(t('code.jwt-misuse'), ['JWT only decoded', 'JWT parsed without a signing key', 'JWT signature algorithm none', 'JWT signed with a literal secret']);
+  assert.deepEqual(t('code.logout-keeps-session'), ['Logout without clearing stored state']);
+  assert.equal(t('code.keyboard-cache').filter((x) => /built in code/.test(x)).length, 2);                  // the setInputType call and the Compose field are two sites
+  assert.deepEqual(t('code.trust-all-tls').filter((x) => /lambda|swallows/.test(x)), ['Hostname verifier lambda that returns true', 'checkServerTrusted that swallows the exception']);
+  const ep = of(out, 'network.endpoint-inventory').find((o) => o.state === 'finding');
+  assert.match(ep.summary, /api\.corp-example\.io/);
+  assert.doesNotMatch(ep.summary, /schemas\.android\.com/);
+  assert.equal(ep.severity, 'low');
+  assert.ok(ep.evidence.length > 0 && ep.evidence.every((e) => e.ref.path && e.excerpt));         // every host has a place to look at
+
+  const ok = await scan({
+    'resources/AndroidManifest.xml': manifest(),
+    [`${app}S.java`]: 'class S extends Service { public IBinder onBind(Intent i) { enforceCallingPermission("x.P", "no"); return new Binder(); } }',
+    [`${app}L.java`]: 'class L { void logout() { prefs.edit().clear().apply(); } }',
+    [`${app}K.java`]: 'class K { void f(EditText passwordField) { passwordField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD); } }',
+    [`${app}J.java`]: 'class J { void f(String q) { Jwts.parser().setSigningKey(key).parse(q); } }',
+    [`${app}Fs.java`]: 'class Fs { void f(Window w) { w.setRecentsScreenshotEnabled(false); } void e() { String x = Build.MODEL; boolean emu = Build.PRODUCT.contains("sdk_gphone"); } }'
+  });
+  // a generated app with thousands of hosts is capped, and every host that is listed has its own evidence
+  const many = Array.from({ length: 520 }, (_, i) => `"https://h${i}.many-example.io/"`).join(';');
+  const eo = await scan({ 'resources/AndroidManifest.xml': manifest(), [`${app}M.java`]: `class M { String a = ${many}; }`, [`${app}N.java`]: 'class N { String a = "https://late.busy-example.io/a"; String b = "https://late.busy-example.io/b"; }' });
+  const ef = of(eo, 'network.endpoint-inventory').find((o) => o.state === 'finding');
+  assert.equal(ef.evidence.length, 40);                                                                         // one place per host named in the summary
+  assert.ok(ef.evidence.every((e) => e.excerpt.includes('example.io')));
+  assert.match(ef.summary, /late\.busy-example\.io/);                                                            // seen late and often: not shut out by one-off hosts
+  assert.ok(ef.evidence[0].excerpt.includes('late.busy-example.io'));                                           // and it leads, with its own evidence
+  // any return type and a deeply nested body are read in full; a body that never closes is inconclusive, not checked
+  const lg = (src) => scan({ 'resources/AndroidManifest.xml': manifest(), [`${app}L.java`]: src }).then((o) => one(o, 'code.logout-keeps-session'));
+  assert.equal((await lg('class L { boolean logout() { return true; } }')).state, 'finding');
+  assert.equal((await lg('class L { Task<Void> signOut() throws Exception { if (a) { for (;;) { if (b) { while (c) { x(); } } } } return null; } }')).state, 'finding');
+  assert.equal((await lg('class L { Task<Void> signOut() { if (a) { for (;;) { if (b) { while (c) { y(); } } } } String s = "}"; prefs.edit().clear().apply(); return null; } }')).state, 'checked');
+  assert.equal((await lg('class L { void logout() { if (a) { x();')).state, 'inconclusive');
+  assert.equal((await lg('class L { void logout() { analytics.commit(); nav.clear(); } }')).state, 'finding');         // generic mutations are not clearing a session
+  assert.equal((await lg('class L { void logout(@Named("account") String id) { x(); } }')).state, 'finding');          // brackets inside the parameters
+  assert.equal((await lg('class L { String s = "void logout() { prefs.edit().clear(); }"; // void signOut() { tokenStore.clear(); }\n }')).state, 'checked');  // text in a string or comment is not a method
+  assert.equal((await lg('class L { void logout() { tokenStore.clear(); } }')).state, 'checked');
+  assert.equal((await lg('class L { void logout() { // tokenStore.clear();\n x(); } }')).state, 'finding');             // a commented clear does nothing
+  assert.equal((await lg('class L { void logout() { CookieManager cm = CookieManager.getInstance(); } }')).state, 'finding');
+  assert.equal((await lg('class L { void logout() { prefs.edit().remove("theme").apply(); } }')).state, 'finding');   // not a session key
+  for (const n of ['onLogout', 'performLogout', 'handleSignOut', 'doLogout']) assert.equal((await lg(`class L { void ${n}() { x(); } }`)).state, 'finding', n);
+  assert.equal((await lg('class L { void logout() { getSharedPreferences("p", 0).edit().remove("auth_token").apply(); } }')).state, 'checked');
+  for (const id of ['code.logout-keeps-session', 'code.jwt-misuse', 'code.keyboard-cache']) assert.equal(of(ok, id).filter((o) => o.state === 'finding').length, 0, id);
+  assert.equal(of(ok, 'code.intent-safety').filter((o) => o.state === 'finding' && /binder/.test(o.title)).length, 0);
+  assert.equal(one(ok, 'code.no-flag-secure').state, 'checked');                                           // setRecentsScreenshotEnabled(false) counts
+  assert.equal(one(ok, 'code.no-anti-debug').state, 'checked');                                            // so does a wider emulator check
+  const exclude = await scan({ 'resources/AndroidManifest.xml': manifest({ body: '<activity android:name=".Main" android:excludeFromRecents="true"/>' }), [`${app}M.java`]: 'class M {}' });
+  assert.equal(one(exclude, 'code.no-flag-secure').state, 'checked');
+});
+
+test('keyboard cache: with no layouts and no decompiled sources the rule is inconclusive, not checked', async () => {
+  const out = await scan({ 'resources/AndroidManifest.xml': manifest() });
+  assert.equal(one(out, 'code.keyboard-cache').state, 'inconclusive');
 });

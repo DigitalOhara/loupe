@@ -42,7 +42,7 @@ const userCa = {
       if (!cfg?.anchors.includes('user')) continue;
       const bypass = cfg.overridePins.includes('user');
       findings.push(finding('network.user-ca', {
-        key: `nsc:${cfg === nsc.debug ? 'debug' : cfg.domains?.join(',') || 'base'}`, severity: bypass ? 'high' : 'medium', detection: 'exact', conclusion: 'weakness',
+        key: `nsc:${cfg === nsc.debug ? 'debug' : cfg.domains?.join(',') || 'base'}`, severity: 'low', detection: 'exact', conclusion: 'weakness',
         summary: `The network security config trusts certificates the user installs${cfg === nsc.debug ? ' (in debug-overrides, and the app is debuggable)' : ''}. Anyone who can add a CA to the device can intercept this app's TLS.${bypass ? ' overridePins="true" also lets that CA skip certificate pinning.' : ''}`,
         evidence: [nscEv(model, cfg, bypass ? 'overridePins' : '<certificates src="user" />')], repro: { steps: ['Open the evidence location.'], command: [] }
       }));
@@ -68,9 +68,26 @@ const expiredPins = {
       const t = p.expiration && /^\d{4}-\d{2}-\d{2}$/.test(p.expiration) ? Date.parse(p.expiration) : NaN;
       if (!(t < now)) continue;
       findings.push(finding('network.expired-pins', {
-        key: p.expiration, severity: 'medium', detection: 'exact', conclusion: 'weakness',
+        key: p.expiration, severity: 'low', detection: 'exact', conclusion: 'weakness',
         summary: `A pin-set expired on ${p.expiration}. After that date Android stops enforcing the pins, so certificate pinning no longer protects this app.`,
         evidence: [nscEv(model, p, `expiration="${p.expiration}"`)], repro: { steps: ['Open the evidence location.'], command: [] }
+      }));
+    }
+    return { findings };
+  }
+};
+
+const singlePin = {
+  id: 'network.single-pin', title: 'Certificate pin set has no backup pin', category: 'NETWORK', needs: ['manifest'],
+  run({ model }) {
+    if (model.nscError) return { inconclusive: `the network security config could not be read: ${model.nscError}` };
+    const findings = [];
+    for (const p of model.nsc?.pins || []) {
+      if (p.count !== 1) continue;
+      findings.push(finding('network.single-pin', {
+        key: `line${p.line}`, severity: 'low', detection: 'exact', conclusion: 'weakness',
+        summary: 'A pin-set holds a single pin. If the server certificate is replaced or its key rotates, every installed copy of the app stops connecting until it is updated. A second pin, for a backup key or the next certificate, avoids that.',
+        evidence: [nscEv(model, p, '<pin-set')], repro: { steps: ['Open the evidence location and count the pin entries.'], command: [] }
       }));
     }
     return { findings };
@@ -95,4 +112,4 @@ const cordova = {
   }
 };
 
-export default [cleartext, userCa, expiredPins, cordova];
+export default [cleartext, userCa, expiredPins, singlePin, cordova];

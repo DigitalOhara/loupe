@@ -22,6 +22,9 @@ export const manifestEv = (model, el, note = '') => xmlEv('manifest', MANIFEST, 
 export const nscEv = (model, el, note = '') => xmlEv('resource', model.nscPath, model.nscLines, el, note);
 
 /** [label, pattern, a secret value (not just a marker line), severity (default high)]. Used by the secrets rule and by `sensitive()`. */
+/** Hosts that are not a real backend: the machine itself, the emulator's alias for the computer and the XML schema namespaces. Matched whole, so `localhost.evil.example` is not one. */
+export const isLocalHost = (h) => /^(?:localhost|127(?:\.\d{1,3}){3}|10\.0\.2\.2|0\.0\.0\.0|xmlns|schemas\.android\.com|schemas\.microsoft\.com|schemas\.xmlsoap\.org|www\.w3\.org)$|\.localhost$/i.test(h);
+
 export const SECRETS = [
   // the header plus Base64 key material after it, so code that only mentions the marker (to strip it from a key it reads) is not a key
   ['Private key', /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----(?:[\s"'+]|\\[nrt])*[A-Za-z0-9+/=]{40,}/g, false],
@@ -30,7 +33,7 @@ export const SECRETS = [
   ['GitHub token', /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g, true],
   ['Stripe live secret key', /\bsk_live_[0-9a-zA-Z]{24,}\b/g, true],
   ['Stripe restricted key', /\brk_live_[0-9a-zA-Z]{24,}\b/g, true],
-  ['Google API key', /\bAIza[0-9A-Za-z_-]{35}\b/g, true, 'medium'],             // usually restricted by app or referrer, so a lower severity
+  ['Google API key', /\bAIza[0-9A-Za-z_-]{35}\b/g, true, 'low'],             // usually restricted by app or referrer, so a lower severity
   ['Google OAuth access token', /\bya29\.[0-9A-Za-z_-]{20,}/g, true],
   ['Twilio API key', /\bSK[0-9a-f]{32}\b/g, true],
   ['Mailgun API key', /\bkey-[0-9a-zA-Z]{32}\b/g, true],
@@ -45,6 +48,7 @@ export const SECRETS = [
   ['Azure storage key', /DefaultEndpointsProtocol=https?;[^"'\n]*?(?:AccountKey|SharedAccessSignature)=[^;"'\s]+/g, true],
   ['SendGrid API key', /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, true],
   ['GitHub fine-grained token', /\bgithub_pat_[A-Za-z0-9_]{22,}\b/g, true],
+  ['Firebase database URL (regional)', /https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.firebasedatabase\.app/g, false, 'low'],       // same as above, for databases outside the US region
   ['Firebase database URL', /https:\/\/[a-z0-9-]+(?:-default-rtdb)?(?:\.[a-z0-9-]+)?\.firebaseio\.com/g, false, 'low'],       // not a secret, but its security rules decide who can read the data
   ['Google service account key', /"type"\s*:\s*"service_account"/g, false],
   ['PGP private key', /-----BEGIN PGP PRIVATE KEY BLOCK-----/g, false],

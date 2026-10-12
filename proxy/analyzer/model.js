@@ -88,7 +88,7 @@ export function parseNsc(text) {
   const collect = (el) => { for (const c of el.children) if (c.name === 'domain-config') { domains.push(cfgOf(c)); collect(c); } };
   collect(root);
   const pins = [];                                              // <pin-set expiration="yyyy-mm-dd"> anywhere in the config
-  const walk = (el) => { for (const c of el.children) { if (c.name === 'pin-set') pins.push({ expiration: c.attrs.expiration || null, line: c.line, endLine: c.endLine }); walk(c); } };
+  const walk = (el) => { for (const c of el.children) { if (c.name === 'pin-set') pins.push({ expiration: c.attrs.expiration || null, count: c.children.filter((x) => x.name === 'pin').length, line: c.line, endLine: c.endLine }); walk(c); } };
   walk(root);
   return { base: base ? cfgOf(base) : null, debug: debug ? cfgOf(debug) : null, domains, pins };
 }

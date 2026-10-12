@@ -43,7 +43,7 @@ const protector = {
     for (const x of await entriesOf(input)) for (const [re, label] of PACKERS) if (re.test(x.path) && !found.has(label)) found.set(label, x.name);
     input.stats.examined++;
     if (!found.size) return { findings: [] };
-    return { findings: [...found].map(([label, name]) => out('package.protector', label, `Protector: ${label}`, 'info', 'probable',
+    return { findings: [...found].map(([label, name]) => out('package.protector', label, `Protector: ${label}`, 'low', 'probable',
       `The APK contains files that belong to ${label}. Packers and protectors encrypt or hide the real code, so a static scan of the decompiled sources sees only a stub. Findings about this app are therefore a lower bound, and a dynamic session shows more.`,
       [ev(name, name, 'file that identifies the protector')], 'List the APK with unzip -l and look for the named file.')) };
   }
@@ -59,7 +59,7 @@ const cordova = {
     const idx = html.find((x) => /(?:^|\/)index\.html$/i.test(x.path));
     if (idx) {
       const t = (await read(input, idx))?.toString('utf8') || '';
-      if (t && !/<meta[^>]+http-equiv=["']?Content-Security-Policy/i.test(t)) findings.push(out('package.hybrid-web', 'no-csp', 'No Content Security Policy in index.html', 'medium', 'exact',
+      if (t && !/<meta[^>]+http-equiv=["']?Content-Security-Policy/i.test(t)) findings.push(out('package.hybrid-web', 'no-csp', 'No Content Security Policy in index.html', 'low', 'exact',
         'The app\'s main web page has no Content-Security-Policy. Without one, any script that gets injected into the page runs with the app\'s plugin access. In a hybrid app that can mean reading files, contacts or the camera.',
         [ev(idx.name, t.split('\n').slice(0, 6).join('\n'), 'start of the page: no CSP meta tag')], 'Open assets/www/index.html and look for a Content-Security-Policy meta tag.'));
     }
@@ -77,7 +77,7 @@ const cordova = {
         [/"cleartext"\s*:\s*true/, 'Capacitor allows cleartext', 'capacitor.config.json sets server.cleartext to true, so the web view may load pages over plain HTTP. A network attacker can change those pages. The scripts they inject then reach the app\'s native plugins.'],
         [/"allowNavigation"\s*:\s*\[[^\]]*"\*"/, 'Capacitor allows navigation anywhere', 'capacitor.config.json lets the web view navigate to any host. A link or redirect can then load attacker pages inside the app. Those pages run with the same bridge to native code as the app\'s own.'],
         [/"webContentsDebuggingEnabled"\s*:\s*true/, 'Capacitor web debugging enabled', 'capacitor.config.json turns on WebView debugging. Anyone with adb can attach Chrome DevTools and read or change the app\'s pages, storage and tokens. This setting belongs only in debug builds.']
-      ]) { const m = re.exec(t); if (m) findings.push(out('package.hybrid-web', label, label, 'medium', 'exact', text, [ev(cap.name, t.slice(Math.max(0, m.index - 40), m.index + 120), 'setting')], 'Open assets/capacitor.config.json.')); }
+      ]) { const m = re.exec(t); if (m) findings.push(out('package.hybrid-web', label, label, label === 'Capacitor allows cleartext' || label === 'Capacitor allows navigation anywhere' ? 'medium' : 'low', 'exact', text, [ev(cap.name, t.slice(Math.max(0, m.index - 40), m.index + 120), 'setting')], 'Open assets/capacitor.config.json.')); }
     }
     return { findings };
   }
@@ -93,15 +93,12 @@ const reactNative = {
     if (!buf) return { inconclusive: 'the React Native bundle could not be read or is larger than the read limit' };
     const findings = [];
     if (buf.subarray(0, 8).equals(HERMES)) {
-      findings.push(out('package.react-native', 'hermes', 'Hermes bytecode: JavaScript not readable', 'info', 'exact',
-        'The app\'s JavaScript is compiled to Hermes bytecode, which Loupe does not decompile. Logic and secrets in the JavaScript are not covered by the source rules, and only plain strings in the bundle are scanned. Hermes bytecode can be disassembled with public tools, so it is not protection.',
-        [ev(b.name, 'Hermes bytecode header', 'file type')], 'Run hbc-disassembler on assets/index.android.bundle.'));
-      return { findings };
+      return { inconclusive: 'the JavaScript is compiled to Hermes bytecode, which Loupe does not decompile, so only plain strings in the bundle were scanned' };
     }
     const t = buf.toString('utf8');
     for (const [re, label, sev, text] of [
-      [/AsyncStorage\.setItem\(\s*["'`][^"'`]*(?:token|password|passwd|secret|jwt|session|pin)[^"'`]*["'`]/i, 'Secret saved in AsyncStorage', 'medium', 'The JavaScript saves a token, password or session value with AsyncStorage. AsyncStorage keeps plain text in an unencrypted file in the app\'s data folder. Anyone who can read that folder, such as through a backup or a rooted phone, reads the secret.'],
-      [/__DEV__\s*=\s*!0|__DEV__:\s*!0|__DEV__\s*=\s*true/, 'Development mode left on', 'medium', 'The bundle was built with __DEV__ set to true. Development mode adds the debug menu, verbose error screens and extra logging, and it runs slower code paths. A build like this should never reach users.'],
+      [/AsyncStorage\.setItem\(\s*["'`][^"'`]*(?:token|password|passwd|secret|jwt|session|pin)[^"'`]*["'`]/i, 'Secret saved in AsyncStorage', 'low', 'The JavaScript saves a token, password or session value with AsyncStorage. AsyncStorage keeps plain text in an unencrypted file in the app\'s data folder. Anyone who can read that folder, such as through a backup or a rooted phone, reads the secret.'],
+      [/__DEV__\s*=\s*!0|__DEV__:\s*!0|__DEV__\s*=\s*true/, 'Development mode left on', 'low', 'The bundle was built with __DEV__ set to true. Development mode adds the debug menu, verbose error screens and extra logging, and it runs slower code paths. A build like this should never reach users.'],
       [/console\.(?:log|debug|info)\([^)]*(?:token|password|secret|jwt|authorization)/i, 'Secret written with console.log', 'low', 'The JavaScript logs a token, password or authorization value with console.log. React Native forwards these calls to logcat, which other apps and adb can read on older or debuggable builds. A logged secret is exposed.'],
       [/(?:localhost|10\.0\.2\.2|127\.0\.0\.1):8081/, 'Metro dev server address in the bundle', 'low', 'The bundle holds the Metro development server address on port 8081. A release build should load only its packaged bundle. The address suggests development settings shipped in the build.']
     ]) { const m = re.exec(t); if (m) findings.push(out('package.react-native', label, label, sev, 'probable', text, [ev(b.name, t.slice(Math.max(0, m.index - 40), m.index + 140), 'match in the bundle')], 'Search assets/index.android.bundle for the shown text.')); }
@@ -145,6 +142,57 @@ const unity = {
   }
 };
 
+// Libraries with a well-known vulnerable range: [group:artifact, first fixed version (a list when older branches got their own fix), severity, the flaw]. Version numbers come from the
+// META-INF files Maven and Gradle leave in an APK. Extend the table as flaws are published.
+const KNOWN_BAD = [
+  ['com.google.android.play:core', '1.7.2', 'medium', 'CVE-2020-8913: a malicious app on the same phone can make SplitCompat run its code inside this app'],
+  ['org.apache.logging.log4j:log4j-core', ['2.3.2', '2.12.4', '2.17.1'], 'low', 'Log4Shell and follow-up flaws (CVE-2021-44228 and others): logged text can load remote code'],
+  ['org.apache.commons:commons-text', '1.10.0', 'low', 'CVE-2022-42889 (Text4Shell): a crafted string can run code through string interpolation'],
+  ['commons-collections:commons-collections', '3.2.2', 'low', 'CVE-2015-7501: a gadget chain lets crafted serialized data run code'],
+  ['com.google.code.gson:gson', '2.8.9', 'low', 'CVE-2022-25647: deserializing crafted input can use up the app\'s memory']
+];
+const older = (a, b) => { const x = a.split(/[.-]/).map((n) => parseInt(n, 10) || 0), y = b.split(/[.-]/).map((n) => parseInt(n, 10) || 0); for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); return false; };
+// Vulnerable when older than the fix of its own branch (2.12.3 against 2.12.4), or, with no fix for its branch, older than the last fix.
+const affected = (v, fixed) => { const fs = [].concat(fixed), branch = (x) => x.split('.').slice(0, 2).join('.'); return older(v, fs.find((f) => branch(f) === branch(v)) || fs.at(-1)); };
+const libraries = {
+  id: 'package.vulnerable-libraries', title: 'Library with a known vulnerable version', category: 'CODE', needs: ['apk'],
+  async run({ input }) {
+    const findings = [], seen = new Set();
+    let records = 0, unreadable = 0;                                  // version files found, and the ones whose version could not be read
+    for (const x of await entriesOf(input)) {
+      const pom = /^META-INF\/maven\/([^/]+)\/([^/]+)\/pom\.properties$/.exec(x.path), ver = /^META-INF\/([^/_]+)_([^/]+)\.version$/.exec(x.path), m = pom || ver;
+      if (!m) continue;
+      records++;
+      const hit = KNOWN_BAD.find(([k]) => k === `${m[1]}:${m[2]}`);
+      if (!hit) continue;
+      const buf = await read(input, x);
+      const version = buf && (pom ? /^version=(.+)$/m.exec(buf.toString('utf8'))?.[1]?.trim() : buf.toString('utf8').trim());
+      if (!version) { unreadable++; continue; }
+      const gav = `${hit[0]}:${version}`;
+      if (!affected(version, hit[1]) || seen.has(gav)) continue;
+      seen.add(gav);
+      findings.push(out('package.vulnerable-libraries', gav, `Library with a known flaw: ${hit[0].split(':')[1]} ${version}`, hit[2], 'exact',
+        `The APK ships ${hit[0]} ${version}. ${hit[3]}. The flaw only matters if the app uses the affected code, which a version file cannot show. Version ${[].concat(hit[1]).join(', ')} fixes it.`,
+        [ev(x.name, `${hit[0]} ${version}`, `fixed in ${[].concat(hit[1]).join(', ')}`)], 'Open the file in the APK, then search the app for calls into the library.'));
+    }
+    if (findings.length) return { findings: findings.slice(0, 20) };
+    if (!records) return { inconclusive: 'the APK has no Maven or Gradle version files, so library versions could not be read' };
+    if (unreadable) return { inconclusive: 'a version file for a library on the list could not be read' };
+    return { findings: [] };
+  }
+};
+
+// An exported Unity player activity accepts a "unity" Intent extra with command-line flags. Builds from before Unity's October 2025 patch load any native library named in it.
+const unityIntent = {
+  id: 'package.unity-intent', title: 'Unity player activity accepts Intent extras', category: 'PLATFORM', needs: ['apk', 'manifest'],
+  async run({ input, model }) {
+    if (!(await entriesOf(input)).some((x) => /libunity\.so$/.test(x.path))) return { notApplicable: 'the APK has no Unity runtime' };
+    const c = model.manifest.components.find((x) => x.kind === 'activity' && x.exported && /UnityPlayer(?:Game)?Activity$/.test(x.name));
+    if (!c) return { findings: [] };
+    return { inconclusive: `${c.name} is exported, so any app can start it with a "unity" extra. Unity runtimes built before the October 2025 patch (CVE-2025-59489) load a native library named in that extra, and the build's Unity version cannot be read from the APK, so whether it is patched is unknown` };
+  }
+};
+
 const dotnet = {
   id: 'package.dotnet', title: '.NET app weakness', category: 'NETWORK', needs: ['apk'],
   async run({ input }) {
@@ -158,7 +206,7 @@ const dotnet = {
       if (buf.subarray(0, 4).toString('latin1') === 'XALZ') { compressed++; continue; }
       if (/^(?:System|Microsoft|Mono|netstandard|mscorlib|Xamarin|Java\.|Newtonsoft|SkiaSharp|Plugin|Square|Google|AndroidX)/.test(path.basename(x.path))) continue;                 // the app's own assemblies, not the framework
       const t = buf.toString('latin1');
-      if (/ServerCertificateValidationCallback/.test(t)) findings.push(out('package.dotnet', `cb|${x.name}`, `Custom certificate validation in ${path.basename(x.path)}`, 'medium', 'heuristic',
+      if (/ServerCertificateValidationCallback/.test(t)) findings.push(out('package.dotnet', `cb|${x.name}`, `Custom certificate validation in ${path.basename(x.path)}`, 'low', 'heuristic',
         'The assembly sets a ServerCertificateValidationCallback. Such a callback often returns true to get past a certificate error in testing, which turns off TLS checks for the whole app. A network attacker can then read and change its traffic.',
         [ev(x.name, 'ServerCertificateValidationCallback referenced', 'name found in the assembly metadata')], 'Decompile the assembly with ILSpy and read the callback body.'));
       if (/Preferences/.test(t) && /Microsoft\.Maui\.Storage|Xamarin\.Essentials/.test(t) && !/SecureStorage/.test(t)) findings.push(out('package.dotnet', `prefs|${x.name}`, `Preferences without SecureStorage in ${path.basename(x.path)}`, 'low', 'heuristic',
@@ -170,4 +218,4 @@ const dotnet = {
   }
 };
 
-export default [protector, cordova, reactNative, flutter, unity, dotnet];
+export default [protector, cordova, reactNative, flutter, unity, unityIntent, libraries, dotnet];

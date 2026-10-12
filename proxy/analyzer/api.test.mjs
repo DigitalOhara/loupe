@@ -70,6 +70,18 @@ test('scan and results', async () => {
   assert.equal(body.scan.outcomes.find((o) => o.ruleId === 'signature.verdict').reason, 'tool-unavailable');
 });
 
+test('scans stored while an info rating existed read back as low, in results and in the summary', async () => {
+  const store = await import('./store.js');
+  const { body } = await call(`/results?id=${ID}`);
+  const f = body.scan.outcomes.find((o) => o.state === 'finding');
+  await store.saveScan({ ...body.scan, outcomes: body.scan.outcomes.map((o) => (o === f ? { ...o, severity: 'info' } : o)) });
+  const again = (await call(`/results?id=${ID}`)).body.scan;
+  assert.ok(!again.outcomes.some((o) => o.severity === 'info'));
+  const row = (await call(`/summary?ids=${ID}`)).body.scans[ID].static;
+  assert.equal(row.severity.high + row.severity.medium + row.severity.low, row.findings);
+  await store.saveScan(body.scan);
+});
+
 test('results survive a rescan with the same fingerprints', async () => {
   const first = (await call(`/results?id=${ID}`)).body.scan.outcomes.filter((o) => o.state === 'finding').map((o) => o.fingerprint).sort();
   await post('/scan', { id: ID });

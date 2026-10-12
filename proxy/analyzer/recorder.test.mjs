@@ -64,7 +64,7 @@ test('the changing group restarts the app, starts components, and launches it ag
   const rec = await stopSession();
   assert.equal(ph.log[0], 'am force-stop com.x.app');
   assert.ok(ran(ph, /am start -n com.x.app\/com.x.app.Open( |$)/).length === 2 && ran(ph, /android.intent.action.VIEW -d myapp:\/\/open\//).length === 1);       // the plain start and the fuzzed one
-  assert.deepEqual(rec.steps.map((s) => s.kind), ['launch', 'activity', 'fuzz', 'deeplink', 'launch', 'window']);
+  assert.deepEqual(rec.steps.map((s) => s.kind), ['launch', 'activity', 'fuzz', 'deeplink', 'launch', 'window', 'window-end']);
 });
 
 test('hostile names are never run as commands', async () => {

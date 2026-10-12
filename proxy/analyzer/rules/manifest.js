@@ -228,7 +228,7 @@ const deepLinks = {
 
 // Manifest switches that each widen what another app or a person with the device can do. One finding per switch.
 const RISKY = [
-  ['testOnly', 'Test-only build', (m) => m.app?.attrs['android:testOnly'] === 'true' && m.app, 'android:testOnly', 'medium', 'The app is marked android:testOnly, so this is a test build. Test builds install only with adb install -t and are not meant to ship.'],
+  ['testOnly', 'Test-only build', (m) => m.app?.attrs['android:testOnly'] === 'true' && m.app, 'android:testOnly', 'low', 'The app is marked android:testOnly, so this is a test build. Test builds install only with adb install -t and are not meant to ship.'],
   ['sharedUserId', 'Shared user ID', (m) => m.attrs['android:sharedUserId'] && m, 'android:sharedUserId', 'low', 'The app sets android:sharedUserId, so it shares a Linux user ID with other apps signed by the same key. Each of them can read the others\' private files.'],
   ['legacyStorage', 'Legacy external storage', (m) => (m.app?.attrs['android:requestLegacyExternalStorage'] === 'true' || m.app?.attrs['android:preserveLegacyExternalStorage'] === 'true') && m.app, 'LegacyExternalStorage', 'low', 'The app opts out of scoped storage. On Android 10 it keeps the old shared-storage model, so files it writes there are readable by any app with the storage permission.'],
   ['taskReparenting', 'Task reparenting allowed', (m) => (m.app?.attrs['android:allowTaskReparenting'] === 'true' && m.app) || m.components.find((c) => c.attrs['android:allowTaskReparenting'] === 'true'), 'android:allowTaskReparenting', 'low', 'The manifest sets allowTaskReparenting="true", which lets an activity move into the task of the app that has its affinity. A malicious app can use this to show its own screen in place of this one (task hijacking).'],
@@ -253,16 +253,16 @@ const riskyAttributes = {
 // Services and receivers that give an app broad reach over the phone. Each is legitimate in the right product, so the finding says what the app can do, not that it misuses it.
 const BIND = (c, perm) => c.permission === `android.permission.${perm}`;
 const SENSITIVE = [
-  ['accessibility', 'Accessibility service', (m) => m.components.filter((c) => c.kind === 'service' && BIND(c, 'BIND_ACCESSIBILITY_SERVICE')), 'BIND_ACCESSIBILITY_SERVICE', 'medium',
+  ['accessibility', 'Accessibility service', (m) => m.components.filter((c) => c.kind === 'service' && BIND(c, 'BIND_ACCESSIBILITY_SERVICE')), 'BIND_ACCESSIBILITY_SERVICE', 'low',
     'The app declares an accessibility service. Such a service can read the text on every screen, see what the user types, and tap and swipe for them. Banking trojans use this to steal credentials and approve their own prompts.'],
-  ['notification-listener', 'Notification listener', (m) => m.components.filter((c) => c.kind === 'service' && BIND(c, 'BIND_NOTIFICATION_LISTENER_SERVICE')), 'BIND_NOTIFICATION_LISTENER_SERVICE', 'medium',
+  ['notification-listener', 'Notification listener', (m) => m.components.filter((c) => c.kind === 'service' && BIND(c, 'BIND_NOTIFICATION_LISTENER_SERVICE')), 'BIND_NOTIFICATION_LISTENER_SERVICE', 'low',
     'The app declares a notification listener. Once the user grants access it receives the content of every notification on the phone, including one-time codes and private messages. Malware uses this to intercept two-factor codes.'],
-  ['device-admin', 'Device administrator', (m) => m.components.filter((c) => c.kind === 'receiver' && BIND(c, 'BIND_DEVICE_ADMIN')), 'BIND_DEVICE_ADMIN', 'medium',
+  ['device-admin', 'Device administrator', (m) => m.components.filter((c) => c.kind === 'receiver' && BIND(c, 'BIND_DEVICE_ADMIN')), 'BIND_DEVICE_ADMIN', 'low',
     'The app registers as a device administrator. An administrator can lock the screen, reset the password and wipe the phone, and it resists being uninstalled. Ransomware and stalkerware rely on these powers.'],
-  ['boot', 'Starts at boot', (m) => m.components.filter((c) => c.kind === 'receiver' && c.filters.some((f) => f.actions.some((a) => /BOOT_COMPLETED|QUICKBOOT_POWERON/.test(a)))), 'BOOT_COMPLETED', 'info',
-    'A receiver starts the app\'s code every time the phone boots. The app then runs in the background without the user opening it. Persistence like this is normal for messaging apps and common in malware.'],
-  ['sms-priority', 'SMS receiver with raised priority', (m) => m.components.filter((c) => c.kind === 'receiver' && c.filters.some((f) => f.actions.includes('android.provider.Telephony.SMS_RECEIVED') && f.priority > 0)), 'android:priority', 'medium',
+  ['sms-priority', 'SMS receiver with raised priority', (m) => m.components.filter((c) => c.kind === 'receiver' && c.filters.some((f) => f.actions.includes('android.provider.Telephony.SMS_RECEIVED') && f.priority > 0)), 'android:priority', 'low',
     'A receiver for incoming SMS sets a raised priority, so it sees each message before lower-priority apps and, for ordered broadcasts, can stop it from reaching them. Apps use this to intercept one-time codes. Since Android 4.4 only the default SMS app can abort the broadcast, but the early read still works.'],
+  ['overlay', 'Draws over other apps', (m) => m.uses.filter((u) => u.name === 'android.permission.SYSTEM_ALERT_WINDOW'), 'SYSTEM_ALERT_WINDOW', 'low',
+    'The app asks for the permission to draw over other apps. It can put its own windows on top of any screen, which fake-login and click-jacking attacks rely on. Most apps do not need it, and the user has to grant it in the settings.'],
   ['cross-profile', 'Cross-profile access', (m) => [m.app?.attrs['android:crossProfile'] === 'true' && m.app, ...m.components.filter((c) => c.attrs?.['android:crossProfile'] === 'true'), ...m.uses.filter((u) => u.name === 'android.permission.INTERACT_ACROSS_PROFILES')].filter(Boolean), 'crossProfile', 'low',
     'The app allows its personal and work-profile instances to talk to each other, through crossProfile or INTERACT_ACROSS_PROFILES. That breaks the separation between work data and personal apps. A flaw in the exchange can leak corporate data into the personal side.']
 ];

@@ -75,6 +75,7 @@ const nativeStrings = {
 const LEFTOVER = [
   [/\.(?:jks|bks|keystore|p12|pfx)$|(?:^|\/)[^/]*private[^/]*\.(?:pem|key)$/i, 'Keystore or private key file', 'medium', 'A keystore or private key file is packaged in the APK. Anyone can extract it, and if it holds a signing or client key, an attacker can use it to impersonate the app or its server.'],
   [/(?:^|\/)(?:mapping|R\.mapping|obfuscate\.map|seeds|usage)\.txt$|(?:^|\/)obfuscate\.map$/i, 'Obfuscation mapping file', 'low', 'An obfuscation mapping file is packaged in the APK. It maps the renamed classes back to their real names, which undoes the obfuscation.'],
+  [/(?:^|\/)(?:assets|res\/raw)\/[^/]+\.(?:db|sqlite3?|realm)$/i, 'Database file in the APK', 'low', 'A database file is packaged in the APK. Anyone can extract and open it, so any data or key it holds is public. Seed data is fine, but check that it carries no user records, tokens or keys.'],
   [/\.js\.map$/i, 'JavaScript source map', 'low', 'A JavaScript source map is packaged in the APK. Anyone can use it to rebuild the original, readable source of the bundled JavaScript.']
 ];
 const leftovers = {

@@ -59,7 +59,7 @@ test('crash: only a crash soon after a step that started a component counts', ()
   const steps = [{ t: T0 + 5000, kind: 'activity', target: 'com.x.app/com.x.app.Deep', cmd: 'am start -n com.x.app/com.x.app.Deep', output: '' }];
   const fatal = (t) => [{ t, pid: 100, level: 'E', tag: 'AndroidRuntime', msg: 'FATAL EXCEPTION: main' }, { t: t + 1, pid: 100, level: 'E', tag: 'AndroidRuntime', msg: 'java.lang.NullPointerException' }];
   const hit = one(analyzeRecording(rec({ steps, logcat: fatal(T0 + 6000) })), 'dyn.crash');
-  assert.deepEqual([hit.state, hit.severity], ['finding', 'medium']);
+  assert.deepEqual([hit.state, hit.severity], ['finding', 'low']);
   assert.match(hit.evidence[0].excerpt, /NullPointerException/);
   assert.equal(one(analyzeRecording(rec({ steps, logcat: fatal(T0 + 30_000) })), 'dyn.crash').state, 'checked');
   assert.equal(one(analyzeRecording(rec({ logcat: fatal(T0 + 6000) })), 'dyn.crash').state, 'not_applicable');
@@ -327,4 +327,39 @@ test('granted dangerous permissions are listed from the package dump', () => {
   assert.equal(f.length, 1);
   assert.match(f[0].summary, /CAMERA, READ_CONTACTS/);
   assert.doesNotMatch(f[0].summary, /INTERNET/);
+});
+
+test('root reaction: a window that is open at launch and at the end, with a silent log, is a finding', () => {
+  const win = (kind, t, output = 'mAttrs={ fl=ALLOW_LOCK_WHILE_SCREEN_ON }') => ({ t, kind, target: 'com.x.app', cmd: 'dumpsys window windows', output });
+  const rooted = { logcat: true, sockets: true, ext: true, root: true, appdata: 'run-as' };
+  const run = (o = {}) => one(analyzeRecording(rec({ caps: rooted, steps: [win('window', T0), win('window-end', T0 + 50_000)], ...o })), 'dyn.root-reaction');
+  assert.deepEqual([run().state, run().severity], ['finding', 'low']);
+  const closed = [win('window', T0), win('window-end', T0 + 50_000, '')];
+  assert.equal(run({ logcat: [log('Root detected, closing', { t: T0 + 2000, tag: 'Guard' })], steps: closed }).state, 'inconclusive');         // noticed, window gone: the user, a crash or the app, so never checked
+  assert.equal(run({ logcat: [log('this device is rooted', { t: T0 + 2000, tag: 'Guard' })] }).state, 'inconclusive');                       // noticed, window still open: nothing shown to be blocked
+  assert.equal(run({ logcat: [log('device is not rooted', { t: T0 + 2000, tag: 'Guard' })] }).state, 'finding');         // a negated message is not a reaction
+  assert.equal(run({ logcat: [log('root cause: timeout', { t: T0 + 2000, tag: 'Net' })] }).state, 'finding');             // neither is a stray "root"
+  assert.equal(run({ logcat: [log('root view attached', { t: T0 + 2000, tag: 'ViewRootImpl' })] }).state, 'finding');
+  assert.equal(run({ steps: [win('window', T0)] }).state, 'inconclusive');                                                // the end state was never read
+  assert.equal(run({ steps: [win('window', T0), win('window-end', T0 + 50_000, '')] }).state, 'inconclusive');            // the window was gone at the end: closed, crashed or reacted
+  assert.equal(run({ steps: [win('window', T0, ''), win('window-end', T0 + 50_000)] }).state, 'inconclusive');
+  assert.equal(run({ endedAt: T0 + 2000 }).state, 'inconclusive');
+  assert.equal(run({ steps: [] }).state, 'not_applicable');
+  assert.equal(one(analyzeRecording(rec({ steps: [win('window', T0), win('window-end', T0 + 50_000)] })), 'dyn.root-reaction').state, 'not_tested');
+  assert.equal(one(analyzeRecording(rec({ caps: rooted, steps: [win('window', T0)], plan: { readonly: true, changing: false, typed: [] } })), 'dyn.root-reaction').reason, 'user-declined');
+});
+
+test('a plain HTTP address in the log is a low finding, local and schema hosts are not, look-alike hosts are, and an Authorization header counts as sensitive', () => {
+  const out = analyzeRecording(rec({ logcat: [
+    log('GET http://api.corp-example.io/v1/login', { tag: 'Http' }), log('GET http://api.corp-example.io/v1/again', { tag: 'Http', t: T0 + 2000 }),
+    log('http://127.0.0.1:8080/x', { tag: 'Dev' }), log('http://localhost:3000/', { tag: 'Dev' }), log('xmlns http://schemas.android.com/apk/res/android', { tag: 'Xml' }), log('GET https://secure.example.org/', { tag: 'Http' }),
+    log('http://localhost.evil.example/x', { tag: 'Http' }), log('http://10.0.2.20/x', { tag: 'Http' }), log('http://schemas.android.com.attacker.example/', { tag: 'Http' }),
+    log('GET http://other.example.net/x', { tag: 'Http', pid: 999 })] }));
+  const f = of(out, 'dyn.logcat-http-url').filter((o) => o.state === 'finding');
+  assert.deepEqual(f.map((o) => [o.title, o.severity, o.conclusion]), [
+    ['Plain HTTP address in the log: api.corp-example.io', 'low', 'exposure'], ['Plain HTTP address in the log: localhost.evil.example', 'low', 'exposure'],
+    ['Plain HTTP address in the log: 10.0.2.20', 'low', 'exposure'], ['Plain HTTP address in the log: schemas.android.com.attacker.example', 'low', 'exposure']]);       // one per host, only the app's own pid
+  const auth = sensitive('--> Authorization: Bearer abcdef1234567890xyz');
+  assert.ok(auth.some((h) => h.label === 'An Authorization header' && h.value === 'abcdef1234567890xyz'));
+  assert.ok(!auth.some((h) => h.label === 'An authorization value'));                                                      // the word Bearer is not the secret
 });

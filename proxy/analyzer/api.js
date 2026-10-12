@@ -27,6 +27,8 @@ const jobFor = async (id) => {
   const aid = artifactId((await entryForAnalysis(id)).meta);
   return [...jobs.values()].find((j) => j.aid === aid && j.status === 'running') || own;
 };
+// Scans stored while an `info` rating existed read back as low, so counts, badges and exports agree.
+const legacy = (o) => (o.severity === 'info' ? { ...o, severity: 'low' } : o);
 const view = (j) => j && { scanId: j.scanId, status: j.status, progress: j.progress, startedAt: j.startedAt, error: j.error };
 
 async function start(id) {
@@ -74,7 +76,7 @@ export async function handleAnalyzerApi(req, res, route) {
       const aid = artifactId((await entryForAnalysis(id)).meta);
       const [scan, dynamic] = await Promise.all([store.latestScan(aid), store.latestScan(aid, 'dynamic')]);
       // The recommendation is looked up when results are read, so scans stored before it existed show it too.
-      const apply = (r) => r && { ...r, outcomes: r.outcomes.map((o) => (o.state === 'finding' ? { ...o, recommendation: recommendationFor(o.ruleId, o.title) } : o)) };
+      const apply = (r) => r && { ...r, outcomes: r.outcomes.map((o) => (o.state === 'finding' ? { ...legacy(o), recommendation: recommendationFor(o.ruleId, o.title) } : o)) };
       return json(res, 200, { ok: true, artifactId: aid, scan: apply(scan), dynamic: apply(dynamic) });
     }
     // What a dynamic session should probe: the exported components the manifest declares, and the APK hash to compare with the installed one.
@@ -87,7 +89,7 @@ export async function handleAnalyzerApi(req, res, route) {
           for (const mode of ['static', 'dynamic']) {
             const r = await store.latestScan(aid, mode);
             if (!r) continue;
-            const found = r.outcomes.filter((o) => o.state === 'finding'), n = (sev) => found.filter((o) => o.severity === sev).length;
+            const found = r.outcomes.filter((o) => o.state === 'finding').map(legacy), n = (sev) => found.filter((o) => o.severity === sev).length;
             row[mode] = { findings: found.length, at: r.finishedAt || r.startedAt, status: r.status, scanId: r.scanId, severity: { high: n('high'), medium: n('medium'), low: n('low') } };
           }
           if (row.static || row.dynamic) out[one] = { ...row, artifactId: aid };

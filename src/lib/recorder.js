@@ -89,6 +89,11 @@ export async function startSession(adb, o) {
       await sleep(400);
       rec.endedAt = Date.now();
       rec.pids = [...pids];
+      // The window again, so "the app stayed open" is something that was seen at the end and not guessed from the launch. Nothing is added when the phone does not answer.
+      if (rec.steps.some((s) => s.kind === 'window')) {
+        const out = await bounded(adb.run(`dumpsys window windows | grep -F -A30 ${quote(o.pkg + '/')} | grep -E "mAttrs|fl="`), 10_000, 'the window state').catch(() => null);
+        if (out !== null) rec.steps.push({ t: Date.now(), kind: 'window-end', target: o.pkg, cmd: 'dumpsys window windows', output: out.slice(0, 2000) });
+      }
       // Read once at the end: an open WebView debugging socket, and the text of the notifications the app is showing. null: not readable.
       rec.devtools = await bounded(adb.run('head -1 /proc/net/unix; grep -a devtools_remote /proc/net/unix'), 10_000, 'the socket list').then((t) => (/RefCount/.test(t) ? [...new Set(t.match(/[\w.]*devtools_remote\w*/g) || [])] : null), () => null);
       // Read once at the end: Android's own App Links verdict, the installed package's flags, and whether the app also runs in a work profile.

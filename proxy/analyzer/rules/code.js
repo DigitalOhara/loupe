@@ -13,6 +13,8 @@ const TLS = [
   ['Empty checkServerTrusted', /void\s+checkServerTrusted\s*\([^)]*\)\s*(?:throws[^{]*)?\{\s*(?:\/\/[^\n]*\s*)*\}/g],
   ['HostnameVerifier that always returns true', /boolean\s+verify\s*\(\s*String\s+\w+\s*,\s*SSLSession\s+\w+\s*\)\s*\{\s*return\s+true\s*;\s*\}/g],
   ['WebView proceeds after an SSL error', /onReceivedSslError\s*\([^)]*\)\s*\{[\s\S]{0,240}?\.proceed\s*\(\s*\)/g],
+  ['Hostname verifier lambda that returns true', /setHostnameVerifier\s*\(\s*\(?\s*\w*\s*,\s*\w*\s*\)?\s*->\s*true\s*\)/g],
+  ['checkServerTrusted that swallows the exception', /void\s+checkServerTrusted\s*\([^)]*\)\s*(?:throws[^{]*)?\{\s*try\s*\{[\s\S]{0,300}?\}\s*catch\s*\([^)]*\)\s*\{\s*(?:\/\/[^\n]*\s*)*\}/g],
   ['Allow-all hostname verifier', /SSLSocketFactory\.ALLOW_ALL_HOSTNAME_VERIFIER|new\s+AllowAllHostnameVerifier\s*\(/g]
 ];
 
@@ -26,7 +28,7 @@ const trustAllTls = {
           if (findings.length >= MAX) return { findings };
           const mine = inApp(rel, pkg);
           findings.push(finding('code.trust-all-tls', {
-            key: `${label}|${scrub(rel)}`, title: `${label}: ${rel.split('/').pop()}`, severity: mine ? 'high' : 'medium', detection: 'probable', conclusion: 'weakness',
+            key: `${label}|${scrub(rel)}`, title: `${label}: ${rel.split('/').pop()}`, severity: mine ? 'high' : 'low', detection: 'probable', conclusion: 'weakness',
             summary: `${label} in ${rel}, ${mine ? 'in the app\'s own package' : 'in a bundled library'}. If this code is used for real connections, any certificate is accepted and TLS gives no protection against a network attacker.`,
             evidence: [sourceEv(rel, text, label.includes('proceeds') ? m.index + m[0].lastIndexOf('.proceed') : m.index, label)], repro: { steps: ['Open the evidence location in the Decompiler and check where the class is used.'], command: [] }
           }));
