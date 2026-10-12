@@ -44,7 +44,8 @@ function Workspace() {
   const [azMounted, setAzMounted] = useState(false);
   useEffect(() => { if (s.view === 'analyzer') setAzMounted(true); }, [s.view]);
 
-  // Drop an .apk anywhere to decompile it.
+  // Drop an .apk anywhere to decompile it, and from the Analyzer to scan it as well.
+  const viewRef = useRef(s.view); viewRef.current = s.view;
   useEffect(() => {
     const has = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file');
     const over = (e) => { if (has(e)) e.preventDefault(); };
@@ -52,7 +53,7 @@ function Workspace() {
       if (!has(e)) return;
       e.preventDefault();                               // any file drop: never let the browser navigate away
       const files = [...e.dataTransfer.files].filter((f) => /\.apk$/i.test(f.name));
-      if (files.length) set({ view: 'decompiler', jxRequest: { kind: 'files', files } });
+      if (files.length) set({ view: 'decompiler', jxRequest: { kind: 'files', files, analyze: viewRef.current === 'analyzer' } });
       else toast('Drop an .apk file to decompile it');
     };
     window.addEventListener('dragover', over); window.addEventListener('drop', drop);

@@ -58,7 +58,7 @@ export default function Decompiler() {
   const docs = useRef(new Map());                         // path -> { text | url | err }
   const lastFiles = useRef(null);
   const ctl = useRef(null);
-  const analyzeAfter = useRef(false);                  // the Apps panel's Analyze button: scan the app as soon as it is decompiled
+  const scanning = useRef(null);                       // the app whose static scan a batch is waiting for, so Cancel can stop it
   const picker = useRef(null);
   const [scans, setScans] = useState({});                  // stored Analyzer results per decompiled app
   useEffect(() => { if (active && recent.length) az.summary(recent.map((r) => r.id)).then(setScans).catch(() => setScans({})); }, [active, recent]);
@@ -93,9 +93,25 @@ export default function Decompiler() {
   /** One cancel signal covers pulling, uploading, opening and watching. */
   const begin = () => { ctl.current?.abort(); ctl.current = new AbortController(); return ctl.current.signal; };
 
+  /** Runs the static scan of an app and waits for it to finish. Throws when the scan fails or cannot be reached. */
+  const scanned = async (id, signal) => {
+    setJob({ state: 'running', msg: 'scanning…', pct: 5 });
+    const started = az.startScan(id);                      // no signal: Cancel waits for this to settle, so it cannot reach the bridge before the scan exists
+    scanning.current = { id, started };
+    try {
+      let j = await started;
+      while (j?.status === 'running') {
+        await new Promise((r) => { const t = setTimeout(r, 500); signal.addEventListener('abort', () => { clearTimeout(t); r(); }, { once: true }); });
+        if (signal.aborted) return;
+        j = await az.scanState(id, signal);
+      }
+      if (j?.status !== 'complete') throw new Error(j ? `the scan ended ${j.status}${j.error ? `: ${j.error}` : ''}` : 'the bridge lost track of the scan');
+    } finally { scanning.current = null; }
+    setJob(null);
+  };
+
   /** Decompiles one app (its base APK plus any splits). Returns true when it finished; `open` shows it afterwards. */
-  const runOne = async (files, signal, open) => {
-    const analyze = analyzeAfter.current; analyzeAfter.current = false;
+  const runOne = async (files, signal, open, analyze) => {
     setJob({ state: 'uploading', msg: 'uploading…', pct: 0 });
     try {
       const ups = [];
@@ -108,7 +124,8 @@ export default function Decompiler() {
       if (fin?.state !== 'done') { setJob(fin); return false; }
       setJob(null);
       if (open) await loadProject(j.id, files[0].name);
-      if (analyze) set({ view: 'analyzer', azRequest: { id: j.id } });
+      if (analyze && open) set({ view: 'analyzer', azRequest: { id: j.id } });
+      else if (analyze) await scanned(j.id, signal);                     // several apps: scan each before the next, so the dashboard has them all at the end
       return true;
     } catch (e) {
       if (e.code === 'no-toolchain') { setJob(null); refresh(); throw e; }
@@ -119,29 +136,30 @@ export default function Decompiler() {
 
   /** `files` is one app; an array marked `.batch` is several separate apps, decompiled one after another. */
   const run = useCallback(async (files, sig = null) => {
-    lastFiles.current = files;
+    lastFiles.current = Object.assign([...files], { batch: files.batch });      // "Decompile Again" never re-scans
     if (tc && !tc.supported) { setJob({ state: 'error', error: `Decompiling is not available on this machine: ${tc.reason}.` }); return; }
     if (tc && !tc.installed) { setPending(files); return; }          // ask first, then continue by itself
     const signal = sig || begin();
+    const analyze = !!files.analyze;                       // travels with the files, so a deferred run keeps it
     try {
-      if (!files.batch) { await runOne(files, signal, true); return; }
+      if (!files.batch) { await runOne(files, signal, true, analyze); return; }
       let done = 0;
       for (const f of files) {
         setBatch({ i: done + 1, n: files.length });
-        if (!(await runOne([f], signal, false))) break;
+        if (!(await runOne([f], signal, false, analyze))) break;
         done++;
       }
       setBatch(null);
       if (signal.aborted) return;
       jx.recent().then(setRecent).catch(() => {});
-      if (done === files.length) { closeProject(); toast(`Decompiled ${done} apps`); }
+      if (done === files.length) { closeProject(); toast(`${analyze ? 'Scanned' : 'Decompiled'} ${done} apps`); if (analyze) set({ view: 'analyzer', azRequest: { dashboard: true } }); }
     } catch (e) {
       setBatch(null);
       if (e.code === 'no-toolchain') setPending(files); else throw e;
     }
   }, [tc, opts, loadProject, refresh]);
 
-  const fromFiles = (list) => {
+  const fromFiles = (list, analyze = false) => {
     const apks = [...list].filter((f) => /\.apk$/i.test(f.name));
     if (!apks.length) { toast('Pick an .apk file'); return; }
     // One app with splits, or several apps? Splits look like split_*, config.* or base-*; with at most one other file it is
@@ -151,15 +169,17 @@ export default function Decompiler() {
     const loose = apks.filter((f) => !isSplit(f));
     if (apks.length > 1 && (named.length > 1 || (!named.length && loose.length > 1))) {
       const many = apks.map((f) => ({ blob: f, name: f.name, role: 'base' }));
-      many.batch = true;
+      many.batch = true; many.analyze = analyze;
       run(many);
       return;
     }
     const base = apks.length === 1 ? apks[0] : named.length === 1 ? named[0] : loose.length === 1 ? loose[0] : apks[0];
-    run(apks.map((f) => ({ blob: f, name: f.name, role: f === base ? 'base' : 'split' })));
+    const one = apks.map((f) => ({ blob: f, name: f.name, role: f === base ? 'base' : 'split' }));
+    one.analyze = analyze;
+    run(one);
   };
 
-  const fromDevicePaths = async (paths, label) => {
+  const fromDevicePaths = async (paths, label, analyze = false) => {
     setJob({ state: 'uploading', msg: `pulling ${label} from the device…`, pct: 0 });
     const signal = begin();
     try {
@@ -171,16 +191,17 @@ export default function Decompiler() {
         files.push({ blob: new Blob([bytes]), name: paths.length > 1 && n !== 'base.apk' ? n : (paths.length > 1 ? `${label}.apk` : n === 'base.apk' ? `${label}.apk` : n), role: n === 'base.apk' || paths.length === 1 ? 'base' : 'split' });
       }
       if (signal.aborted) return;
+      files.analyze = analyze;
       await run(files, signal);
     } catch (e) { setJob({ state: 'error', error: `could not pull: ${e.message}` }); }
   };
 
-  const fromPackage = async (pkg) => {
-    if (!/^[A-Za-z0-9_.]+$/.test(pkg)) { analyzeAfter.current = false; toast('Unexpected package name'); return; }
+  const fromPackage = async (pkg, analyze = false) => {
+    if (!/^[A-Za-z0-9_.]+$/.test(pkg)) { toast('Unexpected package name'); return; }
     const out = await webadb.run(`pm path ${pkg}`).catch(() => '');
     const paths = out.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('package:')).map((l) => l.slice(8));
-    if (!paths.length) { analyzeAfter.current = false; toast(`No APK found for ${pkg}`); return; }
-    await fromDevicePaths(paths, pkg);
+    if (!paths.length) { toast(`No APK found for ${pkg}`); return; }
+    await fromDevicePaths(paths, pkg, analyze);
   };
 
   // Entry points elsewhere in Loupe (Apps, Files, drag-and-drop) leave a request in the store.
@@ -188,13 +209,13 @@ export default function Decompiler() {
     const r = s.jxRequest;
     if (!r) return;
     set({ jxRequest: null });
-    if (r.kind === 'files') fromFiles(r.files);
-    else if (r.kind === 'package') { analyzeAfter.current = !!r.analyze; fromPackage(r.pkg); }
+    if (r.kind === 'files') fromFiles(r.files, !!r.analyze);
+    else if (r.kind === 'package') fromPackage(r.pkg, !!r.analyze);
     else if (r.kind === 'path') fromDevicePaths([r.path], r.path.split('/').pop().replace(/\.apk$/i, ''));
     else if (r.kind === 'open') { if (projId.current !== r.id) loadProject(r.id, r.name); setGoto({ id: r.id, path: r.path, line: r.line }); }
   }, [s.jxRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cancel = () => { if (job?.id) jx.cancel(job.id).catch(() => {}); ctl.current?.abort(); setJob(null); };
+  const cancel = () => { if (job?.id) jx.cancel(job.id).catch(() => {}); const sc = scanning.current; if (sc) sc.started.then(() => az.cancelScan(sc.id)).catch(() => {}); ctl.current?.abort(); setJob(null); };
 
   // ── documents ─────────────────────────────────────────────────────────────
   const openPath = useCallback(async (path, h = null) => {
@@ -294,8 +315,8 @@ export default function Decompiler() {
   const Empty = (
     <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div className="jx-hero">
-        <h2>Decompile and Inspect an Android App</h2>
-        <p>Open an APK from disk, drop one anywhere in this window, or pull an installed app from the connected phone. You get decompiled Java, the decoded manifest and resources, search over everything, and signature checks.</p>
+        <h2>Decompile an Android App</h2>
+        <p>Drop an APK, browse for one, or pull an installed app from the connected phone.<br />Loupe decompiles it into Java, the decoded manifest and resources, and a searchable source tree.</p>
       </div>
       <div className="jx-zone">
         <button className="jx-drop" disabled={busy} onClick={() => picker.current?.click()}>

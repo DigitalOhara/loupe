@@ -249,21 +249,14 @@ export const TrashButton = ({ onClick, title = 'Delete from cache' }) => (
   </button>
 );
 
-const SORTS = {
-  newest: ['Newest First', (a, b) => b.createdAt - a.createdAt],
-  name: ['Name', (a, b) => (a.label || a.name).localeCompare(b.label || b.name)],
-  size: ['Largest First', (a, b) => (b.apkSize || 0) - (a.apkSize || 0)]
-};
-
-/** The decompiled apps in the cache, one row per APK, searchable and sortable. Each row can open the app, send it to the Analyzer, or delete it. */
+/** The decompiled apps in the cache, one row per APK, searchable, newest first. Each row can open the app, send it to the Analyzer, or delete it. */
 export function DecompiledApps({ items, scans = {}, onOpen, onAnalyze, onResults, onDelete, onCopied }) {
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState('newest');
   const shown = useMemo(() => {
     const f = q.trim().toLowerCase();
     const rows = f ? items.filter((r) => [r.label, r.name, r.package, r.md5].some((x) => x && String(x).toLowerCase().includes(f))) : items;
-    return [...rows].sort(SORTS[sort][1]);
-  }, [items, q, sort]);
+    return [...rows].sort((a, b) => b.createdAt - a.createdAt);
+  }, [items, q]);
   return (
     <div>
       <div className="jx-recent-bar">
@@ -271,9 +264,6 @@ export function DecompiledApps({ items, scans = {}, onOpen, onAnalyze, onResults
         <div className="field" style={{ flex: '0 1 200px' }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search apps" aria-label="Search apps" />
         </div>
-        <select className="jx-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort apps">
-          {Object.entries(SORTS).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
-        </select>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table className="jx-scans" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

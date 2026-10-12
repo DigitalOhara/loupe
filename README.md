@@ -45,7 +45,7 @@ Pick a decompiled app, then choose a mode.
 - Static reads the decoded manifest, network config, signature, native libraries and decompiled code. It runs entirely on your computer.
 - Dynamic records the app on the connected phone (log, network connections, files) while you use it, and can run opt-in probes against its exported components and content providers.
 
-The Analyzer opens on a dashboard that lists every app with a stored result in the current mode, with its High, Medium and Low counts, status and last run. Click a row to open its results.
+The Analyzer opens on one dashboard for both modes. Each app with a stored result has a Static row and a Dynamic row, with the High, Medium and Low counts, status and last run. Drop an APK on the dashboard (or anywhere in the window while on the Analyzer) and Loupe decompiles it and starts a static scan. Each row has its own **View Results**, **Rescan** (or **New Session**) and delete buttons, and a mode that has not been run shows a button to run it. The dynamic buttons need a connected phone.
 
 Every finding has a severity, a description, the evidence with an **Open in Decompiler** jump, steps to reproduce, a recommendation, and related OWASP and CWE references. Results are honest about gaps: rules that were inconclusive, not tested or failed are listed with the reason, and no finding is reported without evidence. **Export** saves a Markdown report with finding IDs such as `INSH-01`.
 

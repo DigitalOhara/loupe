@@ -33,7 +33,7 @@ export default function Analyzer() {
   const [plan, setPlan] = useState(null), [pr, setPr] = useState(null), [planErr, setPlanErr] = useState('');
   const [opts, setOpts] = useState({ readonly: true, changing: false, typed: '' });
   const [confirmDel, setConfirmDel] = useState(false);
-  const [screen, setScreen] = useState('dashboard');     // 'dashboard' lists the apps that have a result in this mode, 'result' shows one app
+  const [screen, setScreen] = useState('dashboard');     // 'dashboard' lists the apps that have a result in either mode, 'result' shows one app
   const [sums, setSums] = useState({}), [delRow, setDelRow] = useState(null);
   const [pending, setPending] = useState(null);       // a recording whose upload failed: { id, rec }
   const retryUpload = async () => {
@@ -49,9 +49,11 @@ export default function Analyzer() {
   useEffect(() => {
     const rq = s.azRequest;
     if (!rq) return;
-    set({ azRequest: null }); setMode(rq.mode || 'static'); setTarget(rq.id); setErr(''); setScreen('result');
+    set({ azRequest: null });
+    if (rq.dashboard) { setScreen('dashboard'); return; }
+    setMode(rq.mode || 'static'); setTarget(rq.id); setErr(''); setScreen('result');
     if (rq.scan !== false) az.startScan(rq.id).then(setJob).catch((e) => setErr(e.message));
-    if (rq.newSession) setPlanning(true);
+    setPlanning(!!rq.newSession);
   }, [s.azRequest]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { try { localStorage.setItem(TARGET_KEY, target); } catch { /* private mode */ } }, [target]);
   useEffect(() => { az.status().then((j) => { setRules(j.rules); setDynRules(j.dynamicRules || []); }).catch(() => {}); }, []);
@@ -137,7 +139,7 @@ export default function Analyzer() {
   const buckets = useMemo(() => bucketize(scan?.outcomes || []), [scan]);
   const counts = useMemo(() => ({
     high: buckets.findings.filter((o) => o.severity === 'high').length, medium: buckets.findings.filter((o) => o.severity === 'medium').length,
-    low: buckets.findings.filter((o) => o.severity === 'low').length, info: buckets.findings.filter((o) => o.severity === 'info').length,
+    low: buckets.findings.filter((o) => o.severity === 'low').length,
     findings: buckets.findings.length, inconclusive: buckets.inconclusive.length, checked: buckets.checked.length,
     not_tested: buckets.not_tested.length, error: buckets.error.length
   }), [buckets]);
@@ -170,9 +172,11 @@ export default function Analyzer() {
   const Toolbar = (
     <div className="ctxbar az-ctx">
       {!onDash && <button className="btn" disabled={session.active} onClick={() => setScreen('dashboard')} title="Back to the list of analyzed apps"><span aria-hidden="true">‹</span> Dashboard</button>}
-      <div className="az-seg" role="tablist" aria-label="Analysis type">
-        {[['static', 'Static'], ['dynamic', 'Dynamic']].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} className={`${k}${mode === k ? ' on' : ''}`} onClick={() => setMode(k)}>{l}</button>)}
-      </div>
+      {onDash && <span style={{ fontWeight: 600, fontSize: 14 }}>Analyzer</span>}
+      {!onDash && (
+        <div className="az-seg" role="tablist" aria-label="Analysis type">
+          {[['static', 'Static'], ['dynamic', 'Dynamic']].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} className={`${k}${mode === k ? ' on' : ''}`} onClick={() => setMode(k)}>{l}</button>)}
+        </div>)}
       {!onDash && recent?.length > 0 && (
         <span ref={pickRef} className="az-picker">
           <button className="btn az-picker-button" disabled={session.active} onClick={() => setPick((p) => !p)} title="Choose a decompiled app">
@@ -240,8 +244,8 @@ export default function Analyzer() {
     </>
   );
   if (onDash) {
-    Body = recent === null ? <Say>Loading…</Say> : <Dashboard apps={recent} sums={sums} mode={mode} onMore={() => set({ view: 'decompiler' })} onOpen={(a) => set({ azRequest: { id: a.id, mode, scan: false } })}
-      onAction={(a) => set({ azRequest: mode === 'static' ? { id: a.id, mode } : { id: a.id, mode, scan: false, newSession: true } })} onDelete={setDelRow} />;
+    Body = recent === null ? <Say>Loading…</Say> : <Dashboard apps={recent} sums={sums} canDynamic={s.connected && !session.active} onFiles={(f) => set({ view: 'decompiler', jxRequest: { kind: 'files', files: [...f], analyze: true } })} onOpen={(a, m) => set({ azRequest: { id: a.id, mode: m, scan: false } })}
+      onRun={(a, m) => set({ azRequest: m === 'static' ? { id: a.id, mode: m } : { id: a.id, mode: m, scan: false, newSession: true } })} onDelete={(a, m) => setDelRow({ app: a, mode: m })} />;
   } else if (mode === 'dynamic') {
     if (session.active) Body = <Hero title={`Recording ${session.pkg}`} action={<button className="btn" onClick={() => set({ view: 'console' })}>Back to the Console</button>}>{String(session.step || '').replace(/\.$/, '')}. {plural(session.counts?.logcat ?? 0, 'log line')}, {plural(session.counts?.sockets ?? 0, 'connection')}, {plural(session.counts?.steps ?? 0, 'probe')} so far.{session.error ? ` ${session.error}` : ''}</Hero>;
     else if (analyzing) Body = <Say>Analyzing the recording…</Say>;
@@ -270,8 +274,8 @@ export default function Analyzer() {
         <span>local only</span>
       </div>
       {confirmDel && <DeleteDialog app={app?.label || app?.name || 'this app'} mode={mode} count={buckets.findings.length} onClose={() => setConfirmDel(false)} onConfirm={deleteResult} />}
-      {delRow && <DeleteDialog app={delRow.label || delRow.name} mode={mode} count={sums[delRow.id]?.[mode]?.findings} onClose={() => setDelRow(null)} onConfirm={async () => { const r = delRow; setDelRow(null); try { await az.deleteResults(r.id, mode); toast('Result deleted'); } catch (e) { setErr(e.message); } refreshSums(); }} />}
-      {showRules && <RulesDialog mode={mode} rules={rules} dynamicRules={dynRules} onClose={() => setShowRules(false)} />}
+      {delRow && <DeleteDialog app={delRow.app.label || delRow.app.name} mode={delRow.mode} count={sums[delRow.app.id]?.[delRow.mode]?.findings} onClose={() => setDelRow(null)} onConfirm={async () => { const r = delRow; setDelRow(null); try { await az.deleteResults(r.app.id, r.mode); toast('Result deleted'); } catch (e) { setErr(e.message); } refreshSums(); if (target) load(target); }} />}
+      {showRules && <RulesDialog mode={onDash ? null : mode} rules={rules} dynamicRules={dynRules} onClose={() => setShowRules(false)} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { splitCode } from './codeSpans.js';
 
 /** Turns a stored scan (static or dynamic) into a Markdown report. Pure functions, no browser APIs. */
 
-export const SEV = { high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
+export const SEV = { high: 'High', medium: 'Medium', low: 'Low' };
 const shq = (a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`);
 export const cmdLine = (argv) => argv.map(shq).join(' ');
 /** Inline text: one line, with Markdown structure characters escaped, so hostile text cannot make headings, links, images or table cells. */
@@ -27,7 +27,7 @@ export function reportCode(name) {
   return code.slice(0, 4).padEnd(4, 'X');
 }
 
-export const ORDER = { high: 0, medium: 1, low: 2, info: 3 };
+export const ORDER = { high: 0, medium: 1, low: 2 };
 /** IDs like ISNH-01 for the findings in report order: by severity. */
 export function findingIds(outcomes, code) {
   const sorted = outcomes.filter((o) => o.state === 'finding').map((o, i) => [o, i]).sort(([a, i], [b, j]) => ((ORDER[a.severity] ?? 4) - (ORDER[b.severity] ?? 4)) || i - j).map(([o]) => o);

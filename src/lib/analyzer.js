@@ -12,9 +12,9 @@ export const summary = (ids) => bridgeFetch(`${B}/summary?${qs({ ids: ids.join('
 /** Deletes the stored result of one mode ('static' or 'dynamic') for an app. */
 export const deleteResults = (id, mode) => bridgeFetch(`${B}/results?${qs({ id, mode })}`, { method: 'DELETE' }).then(ok);
 export const status = () => bridgeFetch(`${B}/status`).then(ok);
-export const startScan = (id) => bridgeFetch(`${B}/scan`, { method: 'POST', body: JSON.stringify({ id }) }).then(ok).then((j) => j.job);
+export const startScan = (id, signal) => bridgeFetch(`${B}/scan`, { method: 'POST', body: JSON.stringify({ id }), signal }).then(ok).then((j) => j.job);
 /** The scan job for `id` while the bridge remembers it, else null. `status` is running | complete | partial | cancelled | failed. */
-export const scanState = (id) => bridgeFetch(`${B}/scan?${qs({ id })}`).then(ok).then((j) => j.job);
+export const scanState = (id, signal) => bridgeFetch(`${B}/scan?${qs({ id })}`, { signal }).then(ok).then((j) => j.job);
 export const cancelScan = (id) => bridgeFetch(`${B}/scan?${qs({ id })}`, { method: 'DELETE' }).then(ok);
 /** { artifactId, scan, dynamic }: the latest stored scans (each is null before the first one). */
 export const results = (id) => bridgeFetch(`${B}/results?${qs({ id })}`).then(ok);

@@ -51,14 +51,14 @@ export function bucketize(outcomes) {
   return b;
 }
 
-const Sev = ({ s }) => <span className={`az-sev ${s || 'info'}`}>{SEV[s] || 'Info'}</span>;
+const Sev = ({ s }) => { const k = SEV[s] ? s : 'low'; return <span className={`az-sev ${k}`}>{SEV[k]}</span>; };
 
 function Row({ o, on, onClick }) {
   const finding = o.state === 'finding';
   const sub = finding ? o.evidence[0]?.ref.path || o.ruleId
     : o.reason || (o.coverage?.examined ? `${o.coverage.examined} item${o.coverage.examined === 1 ? '' : 's'} examined` : o.ruleId);
   return (
-    <button className={`az-row ${finding ? `sev-${o.severity || 'info'}` : `state-${o.state}`}${on ? ' on' : ''}`} onClick={onClick}>
+    <button className={`az-row ${finding ? `sev-${SEV[o.severity] ? o.severity : 'low'}` : `state-${o.state}`}${on ? ' on' : ''}`} onClick={onClick}>
       <span className="az-row-main">
         <span className="az-row-title">{titleCase(o.title)}</span>
         <span className="az-row-meta">
@@ -103,7 +103,7 @@ export function ResultList({ items, tab, cur, onSelect, q, setQ, cat, setCat, co
       <div className="az-stats">
         <span className="az-stat-total"><b>{counts.findings}</b><span>{counts.findings === 1 ? 'finding' : 'findings'}</span></span>
         {counts.findings > 0
-          ? <span className="az-stat-set">{['high', 'medium', 'low', 'info'].filter((x) => counts[x] > 0).map((x) => <span key={x} className="az-stat"><b className={x}>{counts[x]}</b><span>{SEV[x]}</span></span>)}</span>
+          ? <span className="az-stat-set">{['high', 'medium', 'low'].filter((x) => counts[x] > 0).map((x) => <span key={x} className="az-stat"><b className={x}>{counts[x]}</b><span>{SEV[x]}</span></span>)}</span>
           : <span className="az-stat-note">{counts.checked} checked · {counts.inconclusive} inconclusive</span>}
       </div>
       <div className="az-tabs" role="tablist" aria-label="Results">
@@ -118,7 +118,7 @@ export function ResultList({ items, tab, cur, onSelect, q, setQ, cat, setCat, co
       <div className="az-list" ref={listRef} tabIndex={0} onKeyDown={onKeys} aria-label="Results list. Use the arrow keys to move between results.">
         {shown.map((o) => {
           // Sorted by severity, so the headings are severities (a category heading would repeat out of order). The category is a tag on each row.
-          const head = grouped && o.severity !== last ? (last = o.severity, <div className={`az-grp az-sev ${o.severity || 'info'}`} key={`g-${o.severity}`}>{SEV[o.severity] || 'Other'} · {items.filter((x) => x.severity === o.severity).length}</div>) : null;
+          const head = grouped && o.severity !== last ? (last = o.severity, <div className={`az-grp az-sev ${SEV[o.severity] ? o.severity : 'low'}`} key={`g-${o.severity}`}>{SEV[o.severity] || 'Other'} · {items.filter((x) => x.severity === o.severity).length}</div>) : null;
           return <React.Fragment key={`${o.ruleId}:${o.fingerprint}:${o.title}`}>{head}<Row o={o} on={cur === o} onClick={() => onSelect(o)} /></React.Fragment>;
         })}
         {!shown.length && <div className="az-none mono">{items.length ? 'Nothing matches the filter.' : tab === 'findings' ? 'No findings in this scan.' : 'Nothing here.'}</div>}
@@ -254,29 +254,44 @@ export function DeleteDialog({ app, mode, count, onClose, onConfirm }) {
   );
 }
 
-const FAMILY = { manifest: 'Manifest', network: 'Network', signature: 'Signature', secrets: 'Secrets', native: 'Native Code', code: 'Code', dyn: 'Dynamic' };
-const GROUP = { readonly: 'read only', changing: 'starts the app from adb' };
+const FAMILY = { manifest: 'Manifest', network: 'Network', signature: 'Signature', secrets: 'Secrets', native: 'Native Code', code: 'Code', package: 'Package', privacy: 'Privacy' };
+const DGROUP = { readonly: 'Read only', changing: 'Starts the app from adb' };
 
-/** Every rule of one mode, grouped by family, searchable. `rules` come from the status call. */
+/** Every check, split into a Static and a Dynamic set (one set when `mode` is given), grouped inside each set and searchable. `rules` come from the status call. */
 export function RulesDialog({ mode, rules, dynamicRules, onClose }) {
-  const m = mode, [q, setQ] = useState('');
-  const list = (m === 'dynamic' ? dynamicRules : rules) || [];
-  const shown = list.filter((r) => !q.trim() || `${r.id} ${r.title}`.toLowerCase().includes(q.trim().toLowerCase()));
-  const groups = shown.reduce((acc, r) => { const f = r.id.split('.')[0]; (acc[f] = acc[f] || []).push(r); return acc; }, {});
+  const [q, setQ] = useState(''), [only, setOnly] = useState('all');
+  const sets = [['static', 'Static', rules, 'These read the decompiled app. Results say finding, inconclusive, checked or not tested, never just "clean".'],
+    ['dynamic', 'Dynamic', dynamicRules, 'These read a recording made on the phone. A check whose probe was off, or whose source was cut short, is reported as not tested or inconclusive.']]
+    .filter(([k]) => (mode || only === 'all' || only === k) && (!mode || k === mode))
+    .map(([k, label, list, note]) => {
+      const shown = (list || []).filter((r) => !q.trim() || `${r.id} ${r.title}`.toLowerCase().includes(q.trim().toLowerCase()));
+      const groups = shown.reduce((acc, r) => { const g = k === 'dynamic' ? DGROUP[r.group || 'readonly'] : FAMILY[r.id.split('.')[0]] || r.id.split('.')[0]; (acc[g] = acc[g] || []).push(r); return acc; }, {});
+      return { k, label, note, total: (list || []).length, shown: shown.length, groups };
+    });
+  const total = sets.reduce((n, x) => n + x.total, 0);
+  const counts = { static: (rules || []).length, dynamic: (dynamicRules || []).length };
   return (
     <Shell title="Scan Checks" width={680} onClose={onClose} actions={<button className="btn" onClick={onClose}>Close</button>}>
       <div className="az-rules-pop">
         <div className="az-rules-head">
-          <input autoFocus placeholder={`Filter ${list.length} checks`} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input autoFocus placeholder={`Filter ${total} checks`} value={q} onChange={(e) => setQ(e.target.value)} />
+          {!mode && (
+            <div className="az-seg" role="tablist" aria-label="Check type">
+              {[['all', 'All', counts.static + counts.dynamic], ['static', 'Static', counts.static], ['dynamic', 'Dynamic', counts.dynamic]].map(([k, l, n]) => <button key={k} role="tab" aria-selected={only === k} className={`${k}${only === k ? ' on' : ''}`} onClick={() => setOnly(k)}>{l} {n}</button>)}
+            </div>)}
         </div>
-        <div className="az-fine">{m === 'static' ? 'Static rules read the decompiled app. Results say finding, inconclusive, checked or not tested, never just "clean".' : 'Dynamic rules read a recording made on the phone. A rule whose probe was off, or whose source was cut short, is reported as not tested or inconclusive.'}</div>
         <div className="az-rules-list">
-          {Object.entries(groups).map(([f, rs]) => (
-            <section key={f}>
-              <h5>{FAMILY[f] || f} <span className="subtle">{rs.length}</span></h5>
-              {rs.map((r) => <div key={r.id} className="az-rule-row"><span>{titleCase(r.title)}</span><span className="mono subtle">{r.id}{r.group ? ` · ${GROUP[r.group] || r.group}` : ''}</span></div>)}
-            </section>))}
-          {!shown.length && <div className="az-fine">No check matches.</div>}
+          {sets.map((x) => (
+            <div key={x.k} className="az-rules-set">
+              <div className={`az-rules-mode ${x.k}`}><span className={`az-ty ${x.k}`}><i />{x.label}</span><span className="subtle">{x.shown === x.total ? x.total : `${x.shown} of ${x.total}`} checks</span></div>
+              <div className="az-fine az-rules-note">{x.note}</div>
+              {Object.entries(x.groups).map(([g, rs]) => (
+                <section key={g}>
+                  <h5>{g} <span className="subtle">{rs.length}</span></h5>
+                  {rs.map((r) => <div key={r.id} className="az-rule-row"><span>{titleCase(r.title)}</span><span className="mono subtle">{r.id}</span></div>)}
+                </section>))}
+              {!x.shown && <div className="az-fine az-rules-note">No check matches.</div>}
+            </div>))}
         </div>
       </div>
     </Shell>
