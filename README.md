@@ -1,12 +1,12 @@
 ![Loupe: Android Control Hub](assets/logo.svg)
 
-Control, inspect and debug an Android phone from your browser, decompile its apps, and scan them for security weaknesses in the same tab. Over USB it needs no drivers, no desktop `adb` server and no agent app on the device. Over Wi-Fi it uses the `adb` tools already on your computer.
+Control, inspect and debug an Android phone from your browser, decompile its apps, and analyze them for security weaknesses in the same tab. Over USB it needs no drivers, no desktop `adb` server and no agent app on the device. Over Wi-Fi it uses the `adb` tools already on your computer.
 
 Loupe speaks the ADB protocol straight from the page, so a live screen mirror, a shell, a file manager, logcat, proxy interception, memory dumps and Frida all run in one tab. It has three views:
 
 - Console for the live device.
 - Decompiler for turning an APK into readable Java, a decoded manifest and resources, and a searchable source tree.
-- Analyzer for scanning a decompiled app, or recording a session on the phone, and reporting weaknesses with evidence.
+- Analyzer for finding security weaknesses in an app. Static analysis scans the decompiled app, and dynamic analysis records the app running on the phone. Every finding comes with evidence, steps to reproduce and a recommendation.
 
 ![Loupe demo](docs/demo/loupe-demo.gif)
 
@@ -39,6 +39,8 @@ When Android blocks an install, Loupe asks before overriding it. For Play Protec
 - One-click setup. The first time, Loupe asks before downloading a private Java runtime and jadx (about 140 MB, checksum-pinned) into `~/.loupe/tools`. jadx runs in an OS sandbox on macOS and Linux. Windows has no usable sandbox, so the decompiler is off there (see [Windows](#windows)).
 
 ### Analyzer
+
+![Loupe Analyzer: the findings of a scanned app, with evidence, steps to reproduce and related standards](docs/screenshots/analyzer.png)
 
 Pick a decompiled app, then choose a mode.
 
