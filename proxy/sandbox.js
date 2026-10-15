@@ -25,6 +25,7 @@ const which = (bin) => { for (const d of (process.env.PATH || '').split(path.del
 export function sandboxKind() {
   if (process.platform === 'darwin' && fs.existsSync('/usr/bin/sandbox-exec')) return 'sandbox-exec';
   if (process.platform === 'linux' && which('bwrap')) return 'bwrap';
+  if (process.platform === 'win32') return 'unsandboxed';
   return null;
 }
 
@@ -33,6 +34,12 @@ export function wrap(cmd, args, { ro: ro0 = [], rw: rw0 = [], profileDir, env = 
   const [ro, rw] = [ro0.map(real), rw0.map(real)];
   const kind = sandboxKind();
   if (!kind) throw new Error('no sandbox available on this platform');
+
+  // Windows: no OS-level filesystem sandbox; run with a scrubbed environment.
+  if (kind === 'unsandboxed') {
+    return { cmd, args, env: { ...env, PATH: process.env.PATH || '', SYSTEMROOT: process.env.SYSTEMROOT || 'C:\\Windows', TEMP: rw[0] || os.tmpdir(), TMP: rw[0] || os.tmpdir() } };
+  }
+
   if (![...ro, ...rw, cmd].every((p) => SAFE.test(p))) throw new Error('refusing a path that needs escaping');
 
   if (kind === 'sandbox-exec') {

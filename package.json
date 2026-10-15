@@ -17,6 +17,8 @@
     "@codemirror/language": "^6.12.4",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
+    "@grpc/grpc-js": "^1.14.6",
+    "@grpc/proto-loader": "^0.8.1",
     "@lezer/highlight": "^1.2.5",
     "@uiw/react-codemirror": "^4.25.11",
     "@yume-chan/adb": "^2.6.4",
@@ -40,5 +42,9 @@
     "frida-compile": "^19.0.5",
     "frida-java-bridge": "^7.0.13",
     "vite": "^6.0.7"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "frida@17.17.0": true
   }
 }

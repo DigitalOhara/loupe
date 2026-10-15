@@ -22,16 +22,17 @@ const Analyzer = lazy(() => import('./components/Analyzer.jsx'));
 import { Apps } from './components/panels/Apps.jsx';
 import { Procs } from './components/panels/Procs.jsx';
 import { DeviceInfo } from './components/panels/DeviceInfo.jsx';
+import { Emulator } from './components/panels/Emulator.jsx';
 
 // Every panel by id; which pane each lives in is state (s.topTabs / s.bottomTabs),
 // so tabs can be dragged between panes.
 const PANELS = {
   logcat: Logcat, traffic: Sockets, perf: Perf, memory: Memory, inspector: Inspector, settings: Settings,
-  info: DeviceInfo, files: Files, apps: Apps, procs: Procs, shell: Shell, frida: Frida, proxy: Proxy
+  info: DeviceInfo, files: Files, apps: Apps, procs: Procs, shell: Shell, frida: Frida, proxy: Proxy, emulator: Emulator
 };
 const LABELS = {
   logcat: 'Logcat', traffic: 'Network', perf: 'Performance', memory: 'Memory', inspector: 'Inspector', settings: 'Settings',
-  info: 'Device Info', files: 'Files', apps: 'Apps', procs: 'Processes', shell: 'Shell', frida: 'Frida', proxy: 'Proxy'
+  info: 'Device Info', files: 'Files', apps: 'Apps', procs: 'Processes', shell: 'Shell', frida: 'Frida', proxy: 'Proxy', emulator: 'Emulator'
 };
 
 function Workspace() {

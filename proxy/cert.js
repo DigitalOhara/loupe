@@ -5,9 +5,20 @@
  * present; this never touches the device, so it works over USB and Wi-Fi alike.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const OPENSSL_PATHS = ['openssl', 'C:\\Program Files\\Git\\mingw64\\bin\\openssl.exe', 'C:\\Program Files\\Git\\usr\\bin\\openssl.exe'];
+let _openssl;
+function openssl() {
+  if (_openssl) return _openssl;
+  for (const p of OPENSSL_PATHS) {
+    try { execFileSync(p, ['version'], { stdio: 'ignore' }); return (_openssl = p); }
+    catch { /* next */ }
+  }
+  throw new Error('openssl not found — install Git for Windows or add openssl to PATH');
+}
 
 /** Handles /__loupe/cert/*. Returns true if it took the request. */
 export async function handleCertApi(req, res, path) {
@@ -24,14 +35,15 @@ export async function handleCertApi(req, res, path) {
   try {
     writeFileSync(inFile, raw);
     // Accept PEM or DER; normalise to PEM either way.
+    const ssl = openssl();
     let form = 'PEM';
-    try { execFileSync('openssl', ['x509', '-inform', 'PEM', '-in', inFile, '-noout']); }
+    try { execFileSync(ssl, ['x509', '-inform', 'PEM', '-in', inFile, '-noout']); }
     catch { form = 'DER'; }
-    execFileSync('openssl', ['x509', '-inform', form, '-in', inFile, '-outform', 'PEM', '-out', pemFile]);
+    execFileSync(ssl, ['x509', '-inform', form, '-in', inFile, '-outform', 'PEM', '-out', pemFile]);
 
-    const hash = execFileSync('openssl', ['x509', '-in', pemFile, '-subject_hash_old', '-noout'])
+    const hash = execFileSync(ssl, ['x509', '-in', pemFile, '-subject_hash_old', '-noout'])
       .toString().trim().split('\n')[0];
-    const subject = execFileSync('openssl', ['x509', '-in', pemFile, '-subject', '-noout'])
+    const subject = execFileSync(ssl, ['x509', '-in', pemFile, '-subject', '-noout'])
       .toString().trim();
     if (!/^[0-9a-f]{8}$/.test(hash)) throw new Error('could not compute the certificate hash');
 

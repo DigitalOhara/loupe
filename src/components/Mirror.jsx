@@ -1,8 +1,34 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLoupe } from '../store.jsx';
 import { RailHeading, Icon } from './ui.jsx';
 import { AndroidKeyCode } from '../lib/scrcpy.js';
 import { useSession } from '../lib/session.js';
+
+const KEY_MAP = {
+  Backspace: AndroidKeyCode.Backspace,
+  Delete: AndroidKeyCode.Delete,
+  Enter: AndroidKeyCode.Enter,
+  Tab: AndroidKeyCode.Tab,
+  Escape: AndroidKeyCode.Back,
+  ArrowUp: AndroidKeyCode.DPadUp,
+  ArrowDown: AndroidKeyCode.DPadDown,
+  ArrowLeft: AndroidKeyCode.DPadLeft,
+  ArrowRight: AndroidKeyCode.DPadRight,
+  ' ': AndroidKeyCode.Space,
+};
+
+const ANDROID_KEY_MAP = {
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  Enter: 'Enter',
+  Tab: 'Tab',
+  Escape: 'GoBack',
+  ArrowUp: 'ArrowUp',
+  ArrowDown: 'ArrowDown',
+  ArrowLeft: 'ArrowLeft',
+  ArrowRight: 'ArrowRight',
+  ' ': ' ',
+};
 
 /**
  * Mirror toolbar. Every key is a real scrcpy control message (or an adb
@@ -26,16 +52,34 @@ const TOOL_KEYS = [
   { title: 'Rotate', d: 'M13 8a5 5 0 1 1-1.7-3.8 M13 2v3h-3', act: 'rotate' }
 ];
 
+const EMU_KEY_ACTIONS = {
+  AndroidBack: 'GoBack',
+  AndroidHome: 'GoHome',
+  AndroidAppSwitch: 'AppSwitch',
+  Power: 'Power',
+  VolumeUp: 'AudioVolumeUp',
+  VolumeDown: 'AudioVolumeDown',
+  ContextMenu: 'ContextMenu',
+};
+
 const mmss = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 
-function ToolKeys({ canvasRef }) {
-  const { s, pressKey, rotateDevice, expandNotifications, screenshot, wakeScreen, toggleRecording } = useLoupe();
+function ToolKeys({ canvasRef, emuMode }) {
+  const { s, pressKey, rotateDevice, expandNotifications, screenshot, wakeScreen, toggleRecording, emuKey } = useLoupe();
   const onPress = (k) => () => {
     if (k.act === 'screenshot') return screenshot();
     if (k.act === 'rotate') return rotateDevice();
-    if (k.act === 'notifications') return expandNotifications();
-    if (k.act === 'wake') return wakeScreen();
+    if (k.act === 'notifications') {
+      if (emuMode) return emuKey('AppSwitch'); // closest gRPC equivalent
+      return expandNotifications();
+    }
+    if (k.act === 'wake') return emuMode ? emuKey('Power') : wakeScreen();
     if (k.act === 'record') return toggleRecording(canvasRef.current);
+    if (emuMode) {
+      const mapped = EMU_KEY_ACTIONS[k.key];
+      if (mapped) return emuKey(mapped);
+      return;
+    }
     return pressKey(AndroidKeyCode[k.key], k.title);
   };
 
@@ -44,8 +88,6 @@ function ToolKeys({ canvasRef }) {
       flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
       gap: 1, padding: '5px 4px',
       borderBottom: '1px solid var(--line)', background: 'var(--bg3)',
-      // Never wrap: a second row pushes the mirror down and shrinks it. Every
-      // key stays on one line, and a too-narrow rail scrolls instead.
       flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'none'
     }} className="toolkey-row">
       {TOOL_KEYS.map((k, i) =>
@@ -73,11 +115,12 @@ function ToolKeys({ canvasRef }) {
 
 /** The mirrored screen: a canvas scrcpy decodes into, plus tap forwarding. */
 function DeviceScreen({ canvasRef }) {
-  const { s, pointerDown, pointerMove, pointerUp, startMirror } = useLoupe();
+  const { s, pointerDown, pointerMove, pointerUp, pressKey, injectText, startMirror } = useLoupe();
   const wrapRef = useRef(null);
   const down = useRef(false);
   const rec = useSession();
   const auto = useRef(0);
+  const [ripple, setRipple] = useState(null);
 
   // A recording session sends you here to watch the app, so a stopped mirror starts by itself, once per session (stopping it by hand sticks).
   useEffect(() => {
@@ -86,14 +129,15 @@ function DeviceScreen({ canvasRef }) {
     startMirror(canvasRef.current);
   }, [rec.active, rec.startedAt, s.connected, s.mirrorOn, s.mirrorBusy]);
 
+  // Auto-focus the mirror wrapper when mirroring starts so it receives keyboard events.
+  useEffect(() => {
+    if (s.mirrorOn && wrapRef.current) wrapRef.current.focus({ preventScroll: true });
+  }, [s.mirrorOn]);
+
   const aspect = s.mirrorSize && s.mirrorSize.width
     ? `${s.mirrorSize.width} / ${s.mirrorSize.height}`
     : '9 / 19.5';
 
-  /**
-   * The canvas is letterboxed by object-fit:contain, so map client coords
-   * against the drawn video box, not the element box, or touches land skewed.
-   */
   const norm = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const vw = s.mirrorSize?.width || r.width;
@@ -108,11 +152,19 @@ function DeviceScreen({ canvasRef }) {
     return [Math.max(0, Math.min(1, nx)), Math.max(0, Math.min(1, ny))];
   };
 
+  const showRipple = useCallback((e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setRipple({ x: e.clientX - r.left, y: e.clientY - r.top, t: Date.now() });
+    setTimeout(() => setRipple(null), 400);
+  }, []);
+
   const onPointerDown = (e) => {
     if (!s.mirrorOn) return;
     e.preventDefault();
+    wrapRef.current?.focus({ preventScroll: true });
     e.currentTarget.setPointerCapture(e.pointerId);
     down.current = true;
+    showRipple(e);
     const [nx, ny] = norm(e);
     pointerDown(nx, ny);
   };
@@ -131,35 +183,41 @@ function DeviceScreen({ canvasRef }) {
     pointerUp(nx, ny);
   };
 
+  const onKeyDown = useCallback((e) => {
+    if (!s.mirrorOn) return;
+    if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      navigator.clipboard.readText()
+        .then((t) => t && injectText(t))
+        .catch(() => {});
+      return;
+    }
+    const mapped = KEY_MAP[e.key];
+    if (mapped !== undefined) {
+      e.preventDefault();
+      pressKey(mapped, e.key);
+      return;
+    }
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      injectText(e.key).catch(() => {});
+    }
+  }, [s.mirrorOn, pressKey, injectText]);
+
   return (
-    <div ref={wrapRef}
+    <ScreenCanvas
+      wrapRef={wrapRef}
+      canvasRef={canvasRef}
+      active={s.mirrorOn}
+      aspect={aspect}
+      ripple={ripple}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endPointer}
       onPointerCancel={endPointer}
-      style={{
-      // Box matches the device aspect exactly, so the canvas fills it with no
-      // letterbox gutters; whichever of height/width binds first wins.
-      //
-      // It takes whatever height the rail gives it rather than a vh guess: a
-      // fixed cap here can't know how tall the rail actually is, so it used to
-      // leave ~130px of the pane unused at common window sizes.
-      position: 'relative', aspectRatio: aspect,
-      flex: '1 1 auto', minHeight: 0, height: 'auto', width: 'auto', maxWidth: '100%',
-      borderRadius: 18, overflow: 'hidden', border: '1px solid var(--line2)',
-      background: 'var(--bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      boxShadow: 'var(--sh)',
-      cursor: s.mirrorOn ? 'crosshair' : 'default',
-      touchAction: 'none', userSelect: 'none'
-    }}>
-      <canvas ref={canvasRef} style={{
-        width: '100%', height: '100%', objectFit: 'fill',
-        display: s.mirrorOn ? 'block' : 'none',
-        pointerEvents: 'none', touchAction: 'none'
-      }} />
-
-      {!s.mirrorOn && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 18, textAlign: 'center' }}>
+      onKeyDown={onKeyDown}
+      placeholder={
+        <>
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--ink3)"
             strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
             <rect x="7" y="2" width="10" height="20" rx="2.4" /><path d="M11 18h2" />
@@ -183,52 +241,228 @@ function DeviceScreen({ canvasRef }) {
               {s.mirrorErr}
             </div>
           )}
-        </div>
-      )}
-    </div>
+        </>
+      }
+    />
   );
 }
 
+/** Emulator gRPC display: frames stream from the host GPU, not guest-side scrcpy. */
+function EmulatorScreen({ canvasRef }) {
+  const { s, startEmuScreen, stopEmuScreen, emuTouch, emuKey } = useLoupe();
+  const wrapRef = useRef(null);
+  const down = useRef(false);
+  const [ripple, setRipple] = useState(null);
+
+  useEffect(() => {
+    if (s.emuScreenOn && wrapRef.current) wrapRef.current.focus({ preventScroll: true });
+  }, [s.emuScreenOn]);
+
+  const aspect = s.emuScreenSize
+    ? `${s.emuScreenSize.width} / ${s.emuScreenSize.height}`
+    : '9 / 19.5';
+
+  const toDevice = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const sz = window.__loupeEmuSize?.() || { w: r.width, h: r.height };
+    const scale = Math.min(r.width / sz.w, r.height / sz.h);
+    const drawnW = sz.w * scale;
+    const drawnH = sz.h * scale;
+    const offX = (r.width - drawnW) / 2;
+    const offY = (r.height - drawnH) / 2;
+    const x = Math.round(((e.clientX - r.left - offX) / drawnW) * sz.w);
+    const y = Math.round(((e.clientY - r.top - offY) / drawnH) * sz.h);
+    return [Math.max(0, Math.min(sz.w, x)), Math.max(0, Math.min(sz.h, y))];
+  };
+
+  const showRipple = useCallback((e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setRipple({ x: e.clientX - r.left, y: e.clientY - r.top, t: Date.now() });
+    setTimeout(() => setRipple(null), 400);
+  }, []);
+
+  const onPointerDown = (e) => {
+    if (!s.emuScreenOn) return;
+    e.preventDefault();
+    wrapRef.current?.focus({ preventScroll: true });
+    e.currentTarget.setPointerCapture(e.pointerId);
+    down.current = true;
+    showRipple(e);
+    const [x, y] = toDevice(e);
+    emuTouch(x, y, 1024, 0);
+  };
+
+  const onPointerMove = (e) => {
+    if (!s.emuScreenOn || !down.current) return;
+    const [x, y] = toDevice(e);
+    emuTouch(x, y, 1024, 0);
+  };
+
+  const endPointer = (e) => {
+    if (!s.emuScreenOn || !down.current) return;
+    down.current = false;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    const [x, y] = toDevice(e);
+    emuTouch(x, y, 0, 0);
+  };
+
+  const onKeyDown = useCallback((e) => {
+    if (!s.emuScreenOn) return;
+    const mapped = ANDROID_KEY_MAP[e.key];
+    if (mapped) { e.preventDefault(); emuKey(mapped); return; }
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      emuKey('', e.key);
+    }
+  }, [s.emuScreenOn, emuKey]);
+
+  return (
+    <ScreenCanvas
+      wrapRef={wrapRef}
+      canvasRef={canvasRef}
+      active={s.emuScreenOn}
+      aspect={aspect}
+      ripple={ripple}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endPointer}
+      onPointerCancel={endPointer}
+      onKeyDown={onKeyDown}
+      placeholder={
+        <>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+            strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="3" width="16" height="18" rx="2" /><path d="M4 15h16 M11 18h2" />
+          </svg>
+          <div style={{ color: 'var(--ink2)', fontSize: 12, fontWeight: 500 }}>
+            Emulator Display
+          </div>
+          <div className="mono" style={{ color: 'var(--ink3)', fontSize: 10, lineHeight: 1.6, textAlign: 'center' }}>
+            gRPC :{ s.emuGrpcPort } — host GPU streaming
+          </div>
+          <button className="btn-accent" disabled={s.emuScreenBusy}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); startEmuScreen(canvasRef.current); }}>
+            {s.emuScreenBusy ? 'Connecting…' : 'Start Display'}
+          </button>
+          {s.emuScreenErr && (
+            <div className="mono" style={{ color: 'var(--warn)', fontSize: 9.5, lineHeight: 1.5, maxWidth: 240 }}>
+              {s.emuScreenErr}
+            </div>
+          )}
+        </>
+      }
+    />
+  );
+}
+
+/** Shared canvas + interaction wrapper used by both DeviceScreen and EmulatorScreen. */
+const ScreenCanvas = ({ canvasRef, active, aspect, ripple, placeholder, wrapRef, ...handlers }) => (
+  <div ref={wrapRef} tabIndex={0} {...handlers} style={{
+    position: 'relative', aspectRatio: aspect,
+    flex: '1 1 auto', minHeight: 0, height: 'auto', width: 'auto', maxWidth: '100%',
+    borderRadius: 18, overflow: 'hidden', border: '1px solid var(--line2)',
+    background: 'var(--bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: 'var(--sh)',
+    cursor: active ? 'crosshair' : 'default',
+    touchAction: 'none', userSelect: 'none', outline: 'none'
+  }}>
+    <canvas ref={canvasRef} style={{
+      width: '100%', height: '100%', objectFit: 'fill',
+      display: active ? 'block' : 'none',
+      pointerEvents: 'none', touchAction: 'none'
+    }} />
+    {ripple && (
+      <div key={ripple.t} style={{
+        position: 'absolute', left: ripple.x - 12, top: ripple.y - 12,
+        width: 24, height: 24, borderRadius: '50%',
+        border: '2px solid var(--accent)', opacity: 0,
+        pointerEvents: 'none',
+        animation: 'lpTouchRipple 0.4s ease-out forwards'
+      }} />
+    )}
+    {!active && (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 18, textAlign: 'center' }}>
+        {placeholder}
+      </div>
+    )}
+  </div>
+);
+
 export function Mirror() {
-  const { s, set, sendText, startMirror, stopMirror } = useLoupe();
+  const { s, set, sendText, startMirror, stopMirror, startEmuScreen, stopEmuScreen } = useLoupe();
   const canvasRef = useRef(null);
+
+  const emuAvailable = !!s.emuGrpcPort;
+  const emuMode = emuAvailable && (s.emuScreenOn || !s.mirrorOn);
+  const active = emuMode ? s.emuScreenOn : s.mirrorOn;
+  const busy = emuMode ? s.emuScreenBusy : s.mirrorBusy;
+  const sizeLabel = emuMode
+    ? (s.emuScreenSize ? `${s.emuScreenSize.width}×${s.emuScreenSize.height}` : '')
+    : (s.mirrorSize ? `${s.mirrorSize.width}×${s.mirrorSize.height}` : '');
+
+  const handleToggle = () => {
+    if (emuMode) {
+      s.emuScreenOn ? stopEmuScreen() : startEmuScreen(canvasRef.current);
+    } else {
+      s.mirrorOn ? stopMirror() : startMirror(canvasRef.current);
+    }
+  };
 
   return (
     <aside style={{ display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: '1px solid var(--line)', background: 'var(--bg2)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 38, borderBottom: '1px solid var(--line)', flex: '0 0 auto' }}>
-        <RailHeading>Mirror</RailHeading>
+        <RailHeading>{emuMode ? 'Emulator' : 'Mirror'}</RailHeading>
         <span className="mono" style={{
           display: 'flex', alignItems: 'center', gap: 5, fontSize: 10,
-          color: s.mirrorOn ? 'var(--err)' : s.connected ? 'var(--ok)' : 'var(--ink3)'
+          color: active ? 'var(--err)' : s.connected || emuAvailable ? 'var(--ok)' : 'var(--ink3)'
         }}>
           <span className="dot" style={{
             width: 5, height: 5,
-            background: s.mirrorOn ? 'var(--err)' : s.connected ? 'var(--ok)' : 'var(--ink3)',
-            animation: s.mirrorOn ? 'lpPulse 1.6s ease-in-out infinite' : 'none'
+            background: active ? 'var(--err)' : s.connected || emuAvailable ? 'var(--ok)' : 'var(--ink3)',
+            animation: active ? 'lpPulse 1.6s ease-in-out infinite' : 'none'
           }} />
-          {s.mirrorOn ? 'LIVE' : s.connected ? 'ONLINE' : 'OFFLINE'}
+          {active ? (emuMode ? 'gRPC' : 'LIVE') : s.connected || emuAvailable ? 'ONLINE' : 'OFFLINE'}
         </span>
+
+        {emuAvailable && (
+          <button
+            className={'toolkey' + (emuMode ? ' on' : '')}
+            title={emuMode ? 'Switch to scrcpy mirror' : 'Switch to emulator display (faster)'}
+            style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4 }}
+            onClick={() => {
+              if (emuMode && s.emuScreenOn) stopEmuScreen();
+              if (!emuMode && s.mirrorOn) stopMirror();
+            }}
+          >
+            {emuMode ? 'EMU' : 'SCR'}
+          </button>
+        )}
+
         <button
-          className={'toolkey' + (s.mirrorOn ? ' on' : '')}
-          title={s.mirrorOn ? 'Stop Mirroring' : 'Start Mirroring'}
-          disabled={!s.connected || s.mirrorBusy}
-          onClick={() => (s.mirrorOn ? stopMirror() : startMirror(canvasRef.current))}
+          className={'toolkey' + (active ? ' on' : '')}
+          title={active ? 'Stop' : 'Start'}
+          disabled={(!s.connected && !emuAvailable) || busy}
+          onClick={handleToggle}
         >
           <Icon size={14} d="M8 3.2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6 M8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6" />
         </button>
         <div className="spacer" />
         <span className="mono" style={{ fontSize: 10, color: 'var(--ink3)' }}>
-          {s.mirrorSize ? `${s.mirrorSize.width}×${s.mirrorSize.height}` : ''}
+          {sizeLabel}
         </span>
       </div>
 
-      <ToolKeys canvasRef={canvasRef} />
+      <ToolKeys canvasRef={canvasRef} emuMode={emuMode && active} />
 
       <div style={{
         flex: '1 1 auto', minHeight: 0, padding: '8px 8px 12px',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9
       }}>
-        <DeviceScreen canvasRef={canvasRef} />
+        {emuMode
+          ? <EmulatorScreen canvasRef={canvasRef} />
+          : <DeviceScreen canvasRef={canvasRef} />
+        }
 
         <div style={{ width: '100%', flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 7, padding: '5px 9px', border: '1px solid var(--line)', borderRadius: 7 }}>
           <input className="mono" value={s.typeText}

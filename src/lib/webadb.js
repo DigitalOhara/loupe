@@ -401,21 +401,29 @@ export async function packageInfo(pkg) {
  * /data/local/tmp (which sync *can* reach) when real file transfer is needed.
  */
 let rootMode = false;
+let alreadyRoot = false; // shell is uid 0 without su (e.g. adb root)
 
 export const setRootMode = (on) => { rootMode = !!on; };
 
 /** Quotes a whole command so it survives `su -c '<cmd>'`. */
 const qc = (cmd) => `'${String(cmd).replace(/'/g, `'\\''`)}'`;
 
-/** True if `su` yields an actual uid=0 shell. */
+/** True if the shell is already uid 0 or `su` yields one. */
 export async function detectRoot() {
   if (!current) return false;
+  try {
+    const direct = await run('id');
+    if (/uid=0/.test(direct)) { alreadyRoot = true; return true; }
+  } catch { /* fall through */ }
+  alreadyRoot = false;
   try { return /uid=0/.test(await run('su -c id')); }
+  catch { /* fall through */ }
+  try { return /uid=0/.test(await run('su 0 id')); }
   catch { return false; }
 }
 
 /** Runs a command, elevated when root mode is on. */
-export const sh = (cmd) => run(rootMode ? `su -c ${qc(cmd)}` : cmd);
+export const sh = (cmd) => run(rootMode && !alreadyRoot ? `su -c ${qc(cmd)}` : cmd);
 
 /**
  * Like sh(), but throws if the command exits nonzero. The none-protocol shell

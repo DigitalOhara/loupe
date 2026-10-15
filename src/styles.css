@@ -53,6 +53,7 @@ a:hover{color:var(--ink);text-decoration:underline;}
 ::-webkit-scrollbar-thumb:hover{background:var(--ink3);}
 
 @keyframes lpPulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+@keyframes lpTouchRipple{0%{opacity:0.7;transform:scale(0.5);}100%{opacity:0;transform:scale(2);}}
 /* Only opacity animates — animating `transform` here would override the
    translateX(-50%) that centres the toast and make it jump sideways. */
 @keyframes lpToast{0%{opacity:0;}10%{opacity:1;}85%{opacity:1;}100%{opacity:0;}}

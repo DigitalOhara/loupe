@@ -15,6 +15,8 @@ import { handleFridaApi, attachFridaSockets } from './frida.js';
 import { handleCertApi } from './cert.js';
 import { handleJadxApi } from './jadx.js';
 import { handleAnalyzerApi } from './analyzer/api.js';
+import { handleEmulatorApi } from './emulator.js';
+import { attachEmulatorScreen } from './emulator-screen.js';
 import { TOKEN, hostOk, tokenOk } from './auth.js';
 
 function localAddresses() {
@@ -60,6 +62,7 @@ export function startProxy({ port = 8090, host = '0.0.0.0' } = {}) {
     if (path.startsWith('/__loupe/cert/')) { handleCertApi(req, res, path); return; }
     if (path.startsWith('/__loupe/jadx/')) { handleJadxApi(req, res, path); return; }
     if (path.startsWith('/__loupe/analyzer/')) { handleAnalyzerApi(req, res, path); return; }
+    if (path.startsWith('/__loupe/emulator/')) { handleEmulatorApi(req, res, path); return; }
     if (path === '/__loupe/info') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, addresses: localAddresses() }));
@@ -83,8 +86,9 @@ export function startProxy({ port = 8090, host = '0.0.0.0' } = {}) {
   });
 
   const gate = (req) => accessOk(req) && hostOk(req) && tokenOk(req);
-  attachAdbSockets(server, { accessOk: gate });   // /__loupe/adb/socket relay
-  attachFridaSockets(server, { accessOk: gate }); // /__loupe/frida/session
+  attachAdbSockets(server, { accessOk: gate });      // /__loupe/adb/socket relay
+  attachFridaSockets(server, { accessOk: gate });    // /__loupe/frida/session
+  attachEmulatorScreen(server, { accessOk: gate });  // /__loupe/emulator/screen
 
   return new Promise((resolve, reject) => {
     // A busy port emits 'error' asynchronously. Without this handler it becomes

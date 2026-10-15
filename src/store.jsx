@@ -10,6 +10,58 @@ import { buildCore, machineFor } from './lib/elfcore.js';
 
 const LIMITS = { logs: 2000, shell: 1500, perf: 60 };
 
+const SSL_BYPASS_SCRIPT = `\
+/* Loupe — Universal SSL Pinning Bypass */
+Java.perform(function () {
+  var TM = Java.registerClass({
+    name: "dev.loupe.TrustManager",
+    implements: [Java.use("javax.net.ssl.X509TrustManager")],
+    methods: {
+      checkClientTrusted: function () {},
+      checkServerTrusted: function () {},
+      getAcceptedIssuers: function () { return []; }
+    }
+  });
+  var SSLContext = Java.use("javax.net.ssl.SSLContext");
+  SSLContext.getInstance.overload("java.lang.String").implementation = function (proto) {
+    var ctx = this.getInstance(proto);
+    ctx.init(null, [TM.$new()], null);
+    return ctx;
+  };
+  try {
+    var CP = Java.use("okhttp3.CertificatePinner");
+    CP.check.overload("java.lang.String", "java.util.List").implementation = function () {};
+    try { CP.check$okhttp.overload("java.lang.String", "kotlin.jvm.functions.Function0").implementation = function () {}; } catch (e) {}
+    console.log("[+] OkHttp3 CertificatePinner bypassed");
+  } catch (e) { console.log("[-] OkHttp3 not found"); }
+  try {
+    Java.use("android.webkit.WebViewClient").onReceivedSslError.implementation = function (v, h) { h.proceed(); };
+    console.log("[+] WebViewClient bypassed");
+  } catch (e) {}
+  try {
+    Java.use("org.apache.http.conn.ssl.AbstractVerifier").verify.overload("java.lang.String", "[Ljava.lang.String;", "[Ljava.lang.String;", "boolean").implementation = function () {};
+    console.log("[+] Apache AbstractVerifier bypassed");
+  } catch (e) {}
+  try {
+    var HV = Java.use("com.datatheorem.android.trustkit.pinning.OkHostnameVerifier");
+    HV.verify.overload("java.lang.String", "javax.net.ssl.SSLSession").implementation = function () { return true; };
+    HV.verify.overload("java.lang.String", "java.security.cert.X509Certificate").implementation = function () { return true; };
+    console.log("[+] TrustKit bypassed");
+  } catch (e) {}
+  try {
+    Java.use("com.android.org.conscrypt.TrustManagerImpl").verifyChain.implementation = function (c) { return c; };
+    console.log("[+] TrustManagerImpl.verifyChain bypassed");
+  } catch (e) {}
+  try {
+    Java.use("com.android.org.conscrypt.Platform").checkServerTrusted.overload(
+      "javax.net.ssl.X509TrustManager", "[Ljava.security.cert.X509Certificate;",
+      "java.lang.String", "com.android.org.conscrypt.AbstractConscryptSocket"
+    ).implementation = function () {};
+    console.log("[+] Conscrypt Platform bypassed");
+  } catch (e) {}
+  console.log("[*] SSL Pinning bypass loaded");
+});`;
+
 let logSeq = 0;
 /** Parses one `logcat -v brief` line: `LEVEL/TAG( PID): message`. */
 function parseLogcat(line) {
@@ -226,7 +278,7 @@ const savedLayout = (() => {
   } catch { return {}; }
 })();
 
-export const DEFAULT_LAYOUT = { topTabs: ['info', 'logcat', 'traffic', 'proxy', 'perf', 'inspector', 'settings'], bottomTabs: ['files', 'apps', 'procs', 'memory', 'shell', 'frida'], top: 'info', bottom: 'shell', split: 0.52, railW: 416, topOpen: true, bottomOpen: true };
+export const DEFAULT_LAYOUT = { topTabs: ['info', 'logcat', 'traffic', 'proxy', 'perf', 'inspector', 'settings'], bottomTabs: ['files', 'apps', 'procs', 'memory', 'shell', 'frida', 'emulator'], top: 'info', bottom: 'shell', split: 0.52, railW: 416, topOpen: true, bottomOpen: true };
 
 const initialState = {
   theme: 'dark',
@@ -251,7 +303,7 @@ const initialState = {
   bottom: 'shell',
   // Which tabs live in each pane, in order. Tabs are draggable between panes.
   topTabs: ['info', 'logcat', 'traffic', 'proxy', 'perf', 'inspector', 'settings'],
-  bottomTabs: ['files', 'apps', 'procs', 'memory', 'shell', 'frida'],
+  bottomTabs: ['files', 'apps', 'procs', 'memory', 'shell', 'frida', 'emulator'],
   split: 0.52,
   railW: 416,          // mirror rail width in px, dragged by the rail edge
   ...savedLayout,
@@ -296,7 +348,8 @@ const initialState = {
 
   // Proxy tab: point the device at an external intercepting proxy (Burp, etc.)
   devProxyHost: '127.0.0.1', devProxyPort: '8080', devProxyLive: '',
-  certName: '', certHash: '', certInstalled: null, certBusy: false,
+  certName: '', certHash: '', certPem: '', certInstalled: null, certBusy: false,
+  quickSetupBusy: false,
   proxyLog: [],
 
   // Memory
@@ -310,6 +363,14 @@ const initialState = {
   fridaRunning: false, fridaSpawn: false, fridaUrl: '',
   fridaTarget: '', fridaTargetOpen: false,   // package the script attaches to / spawns
   script: "// Frida script: pick a target app, then press Run.\nJava.perform(() => {\n  // const C = Java.use('com.example.Target');\n  // C.method.implementation = function (...args) {\n  //   console.log('[*] called', args);\n  //   return this.method(...args);\n  // };\n});",
+
+  // Emulator
+  emuInstalled: false, emuSetupBusy: false, emuImageInstalled: false,
+  emuSdkRoot: '', emuAvds: [], emuRunning: [], emuProgress: null, emuLog: [],
+
+  // Emulator display (gRPC screen streaming — replaces scrcpy for managed emulators)
+  emuGrpcPort: 0,
+  emuScreenOn: false, emuScreenBusy: false, emuScreenErr: '', emuScreenSize: null,
 
   toast: ''
 };
@@ -1166,7 +1227,7 @@ export function LoupeProvider({ children }) {
         const j = await res.json();
         if (!j.ok) throw new Error(j.error || 'could not read that certificate');
         const { pem, hash } = j;
-        set({ certHash: hash });
+        set({ certHash: hash, certPem: pem });
         proxyLog(`subject hash ${hash}`);
 
         const hasModules = /YES/.test(await webadb.sh('test -d /data/adb/modules && echo YES || echo NO'));
@@ -1408,7 +1469,254 @@ export function LoupeProvider({ children }) {
       loadSettings, putSetting, deleteSetting, browseTo, toggleRoot,
       isRecording: record.isRecording,
       setDeviceProxy, clearDeviceProxy, refreshDeviceProxy, testProxy, installCert, removeCert, checkCert,
+
+      proxyQuickSetup: async () => {
+        if (!webadb.isConnected()) { toast('No device connected'); return; }
+        const dev = webadb.currentDevice();
+        if (!dev?.serial) { toast('No device serial available'); return; }
+        const serial = dev.serial;
+        const port = Number(s.devProxyPort) || 8080;
+
+        set({ quickSetupBusy: true });
+        proxyLogStart('quick setup starting…');
+
+        try {
+          proxyLog('ensuring adb root…');
+          const rootRes = await bridgeFetch('/__loupe/adb/root', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serial })
+          });
+          const rootJ = await rootRes.json();
+          proxyLog(rootJ.ok ? `root: ${rootJ.output || 'ok'}` : `root failed: ${rootJ.output || 'denied'}`);
+
+          const hasRoot = await webadb.detectRoot();
+          webadb.setRootMode(hasRoot);
+          set({ rootAvailable: hasRoot, rootMode: hasRoot });
+
+          proxyLog('ensuring WiFi is connected…');
+          try {
+            const wifiOut = await webadb.run('cmd wifi status 2>/dev/null | grep -m1 "Wifi is connected" || ' +
+              '(cmd wifi connect-network AndroidWifi open 2>/dev/null; sleep 3; cmd wifi status 2>/dev/null | head -5)');
+            proxyLog(wifiOut.includes('connected') ? 'WiFi connected' : 'WiFi: ' + wifiOut.split('\n')[0]);
+          } catch { /* older devices may not have cmd wifi */ }
+
+          proxyLog(`adb reverse tcp:${port} → tcp:${port}…`);
+          const revRes = await bridgeFetch('/__loupe/adb/reverse', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serial, remote: port, local: port })
+          });
+          const revJ = await revRes.json();
+          proxyLog(revJ.ok ? `reverse: ${revJ.output || 'ok'}` : `reverse failed: ${revJ.output || 'error'}`);
+
+          if (s.certPem && s.certHash) {
+            proxyLog(`re-installing CA cert ${s.certHash}.0…`);
+            const pem = s.certPem;
+            const hash = s.certHash;
+            const out = await webadb.sh(
+              `HASH=${hash}; TMP=/data/local/tmp/loupe-cacerts; rm -rf $TMP; mkdir -p $TMP; ` +
+              'cp /system/etc/security/cacerts/* $TMP/ 2>/dev/null; ' +
+              'cp /apex/com.android.conscrypt/cacerts/* $TMP/ 2>/dev/null; ' +
+              `printf %s '${btoa(pem)}' | base64 -d > $TMP/$HASH.0; ` +
+              'chown 0:0 $TMP/* 2>/dev/null; chmod 644 $TMP/* 2>/dev/null; ' +
+              'chcon u:object_r:system_security_cacerts_file:s0 $TMP/* 2>/dev/null; ' +
+              'for D in /system/etc/security/cacerts /apex/com.android.conscrypt/cacerts; do ' +
+              '[ -d $D ] || continue; mount -t tmpfs tmpfs $D 2>/dev/null; cp $TMP/* $D/ 2>/dev/null; ' +
+              'chmod 644 $D/* 2>/dev/null; chcon u:object_r:system_security_cacerts_file:s0 $D/* 2>/dev/null; done; ' +
+              'ls /system/etc/security/cacerts/$HASH.0 2>/dev/null && echo INSTALLED || echo FAILED'
+            );
+            proxyLog(/INSTALLED/.test(out) ? `cert ${hash}.0 installed` : 'cert install failed — upload again in CA section');
+            set({ certInstalled: /INSTALLED/.test(out) });
+          } else {
+            proxyLog('no cached CA cert — upload one in the CA Certificate section first');
+          }
+
+          const fridaVer = await webadb.fridaInstalledVersion().catch(() => '');
+          if (fridaVer) {
+            const fPid = await webadb.fridaPid().catch(() => null);
+            if (fPid) {
+              proxyLog(`frida-server already running (pid ${fPid})`);
+              set({ frida: { running: true, pid: fPid }, fridaInstalled: fridaVer });
+            } else {
+              proxyLog('starting frida-server…');
+              try {
+                const pid = await webadb.startFridaServer((m) => proxyLog(m));
+                set({ frida: { running: true, pid }, fridaInstalled: fridaVer });
+                proxyLog(`frida-server started (pid ${pid})`);
+              } catch (e) { proxyLog(`frida-server start failed: ${e.message}`); }
+            }
+          } else {
+            proxyLog('frida-server not installed — install from the Frida tab if needed');
+          }
+
+          proxyLog(`setting device proxy → 127.0.0.1:${port}…`);
+          await webadb.run(`settings put global http_proxy 127.0.0.1:${port}`);
+          refreshDeviceProxy();
+
+          proxyLog('✓ quick setup complete');
+          toast('Proxy setup complete');
+        } catch (e) {
+          proxyLog(`✗ setup failed: ${e.message}`);
+          toast('Quick setup failed: ' + e.message);
+        } finally { set({ quickSetupBusy: false }); }
+      },
+
+      loadBypassScript: () => {
+        set({ script: SSL_BYPASS_SCRIPT, fridaSpawn: true, bottom: 'frida', bottomOpen: true });
+        toast('SSL bypass loaded — pick a target app and Run');
+      },
+
       memSnapshot, memMaps, dumpHeap, dumpMemory, saveMemText,
+
+      // ── Emulator ──
+      emuRefresh: async () => {
+        try {
+          const r = await bridgeFetch('/__loupe/emulator/status');
+          const j = await r.json();
+          if (j.ok) {
+            const grpc = (j.running || []).find((e) => e.grpcPort)?.grpcPort || 0;
+            set({
+              emuInstalled: j.installed, emuImageInstalled: j.imageInstalled,
+              emuSdkRoot: j.sdkRoot, emuAvds: j.avds || [], emuRunning: j.running || [],
+              emuSetupBusy: j.setupBusy, emuProgress: j.progress,
+              ...(grpc ? { emuGrpcPort: grpc } : {})
+            });
+          }
+        } catch {}
+      },
+      emuSetup: async () => {
+        set({ emuSetupBusy: true });
+        update((st) => ({ emuLog: st.emuLog.concat('· starting SDK setup…').slice(-50) }));
+        try {
+          await bridgeFetch('/__loupe/emulator/setup', { method: 'POST' });
+          // Poll progress until done (bridgeFetch handles auth; EventSource can't)
+          const poll = async () => {
+            for (let i = 0; i < 600; i++) {
+              await new Promise((r) => setTimeout(r, 3000));
+              try {
+                const r = await bridgeFetch('/__loupe/emulator/status');
+                const j = await r.json();
+                if (!j.ok) continue;
+                set({ emuProgress: j.progress, emuInstalled: j.installed, emuImageInstalled: j.imageInstalled, emuSdkRoot: j.sdkRoot, emuAvds: j.avds || [], emuRunning: j.running || [] });
+                update((st) => ({ emuLog: st.emuLog.concat(`· ${j.progress?.phase || 'working'}${j.progress?.detail ? ' — ' + j.progress.detail : ''}`).slice(-50) }));
+                if (!j.setupBusy) {
+                  set({ emuSetupBusy: false });
+                  if (j.installed) {
+                    toast('Android emulator ready');
+                    update((st) => ({ emuLog: st.emuLog.concat('· setup complete').slice(-50) }));
+                  } else {
+                    toast('Setup ended — check log');
+                  }
+                  return;
+                }
+              } catch { /* retry */ }
+            }
+            set({ emuSetupBusy: false });
+          };
+          poll();
+        } catch (e) {
+          set({ emuSetupBusy: false });
+          update((st) => ({ emuLog: st.emuLog.concat('· setup error: ' + e.message).slice(-50) }));
+          toast('Emulator setup failed: ' + e.message);
+        }
+      },
+      emuStart: async (name) => {
+        update((st) => ({ emuLog: st.emuLog.concat(`· starting ${name || 'loupe_device'} (headless)…`).slice(-50) }));
+        try {
+          const r = await bridgeFetch('/__loupe/emulator/start', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error);
+          const serial = j.serial;
+          if (j.grpcPort) set({ emuGrpcPort: j.grpcPort });
+          update((st) => ({ emuLog: st.emuLog.concat(`· emulator ${serial} launched (gRPC :${j.grpcPort}) — waiting for boot…`).slice(-50) }));
+          toast(`Emulator launched: ${serial}`);
+          // Poll until booted, then auto-connect to Loupe
+          (async () => {
+            for (let i = 0; i < 90; i++) {
+              await new Promise((r) => setTimeout(r, 3000));
+              try {
+                const sr = await bridgeFetch('/__loupe/emulator/status');
+                const sj = await sr.json();
+                if (!sj.ok) continue;
+                set({ emuAvds: sj.avds || [], emuRunning: sj.running || [] });
+                const emu = (sj.running || []).find((x) => x.serial === serial);
+                if (emu?.booted) {
+                  update((st) => ({ emuLog: st.emuLog.concat(`· ${serial} booted (rooted, SELinux permissive) — connecting…`).slice(-50) }));
+                  toast('Emulator booted — connecting…');
+                  // Auto-connect via Loupe's wireless transport
+                  await actions.useWirelessDevice(serial);
+                  update((st) => ({ emuLog: st.emuLog.concat(`· connected to ${serial}`).slice(-50) }));
+                  return;
+                }
+              } catch {}
+            }
+            update((st) => ({ emuLog: st.emuLog.concat('· boot timed out — try Connect manually').slice(-50) }));
+          })();
+        } catch (e) {
+          update((st) => ({ emuLog: st.emuLog.concat('· start failed: ' + e.message).slice(-50) }));
+          toast('Start failed: ' + e.message);
+        }
+      },
+      emuStop: async (name) => {
+        try {
+          await bridgeFetch('/__loupe/emulator/stop', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          update((st) => ({ emuLog: st.emuLog.concat(`· ${name || 'loupe_device'} stopped`).slice(-50) }));
+          toast('Emulator stopped');
+          const r = await bridgeFetch('/__loupe/emulator/status');
+          const j = await r.json();
+          if (j.ok) set({ emuAvds: j.avds || [], emuRunning: j.running || [], emuGrpcPort: 0, emuScreenOn: false, emuScreenSize: null });
+          try { window.__loupeEmuWs?.close(); } catch {}
+        } catch (e) { toast('Stop failed: ' + e.message); }
+      },
+      emuConnect: async (name) => {
+        update((st) => ({ emuLog: st.emuLog.concat(`· connecting Loupe to ${name}…`).slice(-50) }));
+        try {
+          // First verify the emulator is online and rooted via the bridge
+          const r = await bridgeFetch('/__loupe/emulator/connect', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error);
+          update((st) => ({ emuLog: st.emuLog.concat(`· ${j.serial} online (${j.model}, rooted: ${j.rooted}) — attaching Loupe…`).slice(-50) }));
+          // Now actually connect Loupe's device transport (mirror, shell, files, etc.)
+          await actions.useWirelessDevice(j.serial);
+          update((st) => ({ emuLog: st.emuLog.concat(`· Loupe connected to ${j.serial} — mirror active`).slice(-50) }));
+        } catch (e) {
+          update((st) => ({ emuLog: st.emuLog.concat('· connect failed: ' + e.message).slice(-50) }));
+          toast('Connect failed: ' + e.message);
+        }
+      },
+      emuCreateAvd: async (name) => {
+        try {
+          const r = await bridgeFetch('/__loupe/emulator/avd', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error);
+          update((st) => ({ emuLog: st.emuLog.concat(`· AVD "${name}" created`).slice(-50) }));
+          toast(`AVD "${name}" created`);
+          const r2 = await bridgeFetch('/__loupe/emulator/status');
+          const j2 = await r2.json();
+          if (j2.ok) set({ emuAvds: j2.avds || [], emuRunning: j2.running || [] });
+        } catch (e) { toast('Create AVD failed: ' + e.message); }
+      },
+      emuDeleteAvd: async (name) => {
+        try {
+          await bridgeFetch(`/__loupe/emulator/avd?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+          update((st) => ({ emuLog: st.emuLog.concat(`· AVD "${name}" deleted`).slice(-50) }));
+          toast(`AVD "${name}" deleted`);
+          const r = await bridgeFetch('/__loupe/emulator/status');
+          const j = await r.json();
+          if (j.ok) set({ emuAvds: j.avds || [], emuRunning: j.running || [] });
+        } catch (e) { toast('Delete AVD failed: ' + e.message); }
+      },
 
       toggleTheme: () => update((st) => ({ theme: st.theme === 'dark' ? 'light' : 'dark' })),
 
@@ -1554,6 +1862,9 @@ export function LoupeProvider({ children }) {
           appIconsRef.current = {};
           set({ connected: true, device: dev, logs: [], appIcons: {}, logApp: '', logAppPids: [], devProxyHost: '127.0.0.1', wifiBusy: false, top: 'info', topOpen: true, bottom: 'shell', paused: true, procSort: 'pid', procDir: 'desc' });
           toast('Connected · ' + dev.model);
+          // Auto-detect gRPC port for emulator devices (port + 3000)
+          const emuMatch = /^emulator-(\d+)$/.exec(serial);
+          if (emuMatch) set({ emuGrpcPort: Number(emuMatch[1]) + 3000 });
           webadb.detectRoot().then((root) => {
             webadb.setRootMode(root);
             set({ rootAvailable: root, rootMode: root });
@@ -1610,6 +1921,7 @@ export function LoupeProvider({ children }) {
           settings: [], settingsSel: null, settingsVal: '',
           fileSel: null, preview: null, clipboard: null, appSel: null, appInfo: null,
           mirrorOn: false, mirrorSize: null,
+          emuGrpcPort: 0, emuScreenOn: false, emuScreenSize: null,
           fridaTarget: '', fridaTargetOpen: false, rootAvailable: false, rootMode: false
         });
         toast('Device disconnected');
@@ -1661,6 +1973,72 @@ export function LoupeProvider({ children }) {
         set({ mirrorOn: false, mirrorSize: null, recording: false, recordSecs: 0 });
       },
 
+      // ---- emulator gRPC display (replaces scrcpy for managed emulators) ----
+      startEmuScreen: async (canvas) => {
+        const grpcPort = s.emuGrpcPort;
+        if (!grpcPort) { toast('No emulator gRPC port — start an emulator first'); return; }
+        set({ emuScreenBusy: true, emuScreenErr: '' });
+
+        try {
+          const wsUrl = `ws://localhost:8090/__loupe/emulator/screen?grpc=${grpcPort}&width=${Math.round((s.railW || 416) * devicePixelRatio)}`;
+          const ws = await bridgeWS(wsUrl);
+          let screenW = 0, screenH = 0;
+
+          const ctx = canvas.getContext('2d');
+
+          ws.onmessage = async (ev) => {
+            if (typeof ev.data === 'string') {
+              const msg = JSON.parse(ev.data);
+              if (msg.type === 'size') {
+                screenW = msg.width;
+                screenH = msg.height;
+                canvas.width = screenW;
+                canvas.height = screenH;
+                set({ emuScreenSize: { width: screenW, height: screenH } });
+              }
+              if (msg.type === 'error') set({ emuScreenErr: msg.message });
+              return;
+            }
+            const blob = new Blob([ev.data], { type: 'image/png' });
+            const bmp = await createImageBitmap(blob);
+            if (canvas.width !== bmp.width) canvas.width = bmp.width;
+            if (canvas.height !== bmp.height) canvas.height = bmp.height;
+            ctx.drawImage(bmp, 0, 0);
+            bmp.close();
+          };
+
+          ws.onclose = () => set({ emuScreenOn: false, emuScreenSize: null });
+          ws.onerror = () => set({ emuScreenOn: false, emuScreenErr: 'WebSocket error' });
+
+          // Stash the ws and screen dimensions for input routing
+          window.__loupeEmuWs = ws;
+          window.__loupeEmuSize = () => ({ w: screenW, h: screenH });
+
+          set({ emuScreenOn: true, emuScreenBusy: false });
+          toast('Emulator display connected');
+        } catch (e) {
+          set({ emuScreenBusy: false, emuScreenOn: false, emuScreenErr: e.message });
+          toast('Emulator display failed: ' + e.message);
+        }
+      },
+
+      stopEmuScreen: () => {
+        try { window.__loupeEmuWs?.close(); } catch {}
+        window.__loupeEmuWs = null;
+        window.__loupeEmuSize = null;
+        set({ emuScreenOn: false, emuScreenSize: null });
+      },
+
+      emuTouch: (x, y, pressure, id) => {
+        const ws = window.__loupeEmuWs;
+        if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'touch', x, y, pressure, id: id || 0 }));
+      },
+
+      emuKey: (key, text) => {
+        const ws = window.__loupeEmuWs;
+        if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'key', key, text }));
+      },
+
       // Pointer stream for the mirror: down/move/up give real taps, drags and swipes.
       pointerDown: async (nx, ny) => {
         try { await mirror.pointerDown(nx, ny); }
@@ -1708,6 +2086,11 @@ export function LoupeProvider({ children }) {
             );
           } else toast('No device connected');
         }
+      },
+
+      injectText: async (text) => {
+        if (!text) return;
+        await mirror.injectText(text);
       },
 
       /** Screenshot saves to disk AND lands on the clipboard, paste-ready. */
@@ -1761,7 +2144,7 @@ export function LoupeProvider({ children }) {
         );
       }
     };
-  }, [set, update, s.typeText, s.path, s.clipboard, s.appFilter, s.pairAddr, s.pairCode, s.connectAddr, s.qr, s.memText, s.memLabel, s.rootMode, s.mirrorOn, s.memRegionQ, s.memCapMB, s.deviceInfo, s.frida, s.fridaSpawn, s.script, s.fridaUrl, s.fridaTarget, s.rootAvailable, s.devProxyHost, s.devProxyPort, s.certHash]);
+  }, [set, update, s.typeText, s.path, s.clipboard, s.appFilter, s.pairAddr, s.pairCode, s.connectAddr, s.qr, s.memText, s.memLabel, s.rootMode, s.mirrorOn, s.memRegionQ, s.memCapMB, s.deviceInfo, s.frida, s.fridaSpawn, s.script, s.fridaUrl, s.fridaTarget, s.rootAvailable, s.devProxyHost, s.devProxyPort, s.certHash, s.certPem, s.emuGrpcPort, s.railW]);
 
   const value = useMemo(() => ({ s, ...actions }), [s, actions]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -16,7 +16,7 @@ const badge = { textTransform: 'none', letterSpacing: 0, fontSize: 9.5 };
 
 export function Proxy() {
   const { s, set, setDeviceProxy, clearDeviceProxy, refreshDeviceProxy, testProxy,
-          installCert, removeCert, checkCert } = useLoupe();
+          installCert, removeCert, checkCert, proxyQuickSetup, loadBypassScript } = useLoupe();
   const certRef = useRef(null);
 
   useEffect(() => {
@@ -29,6 +29,22 @@ export function Proxy() {
   return (
     <Split id="proxy">
       <div className="scroll" style={{ minWidth: 0, padding: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      <section>
+        <div style={head}><span>Quick Setup</span></div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <Mini tone="accent" disabled={s.quickSetupBusy}
+            label={s.quickSetupBusy ? 'Setting up…' : 'Proxy Quick Setup'}
+            onClick={proxyQuickSetup} />
+          <Mini label="Bypass SSL Pinning" onClick={loadBypassScript} />
+        </div>
+        <p className="mono" style={hint}>
+          Quick Setup re-establishes everything lost on reboot: adb root, adb reverse,
+          system CA cert, frida-server, and the device proxy — one click.
+          Bypass SSL Pinning loads a universal Frida script into the Frida tab.
+        </p>
+      </section>
+
       <section>
         <div style={head}>
           <span>Device Proxy</span>

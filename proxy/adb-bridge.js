@@ -220,6 +220,29 @@ export async function handleAdbApi(req, res, path) {
       return true;
     }
 
+    if (path === '/__loupe/adb/root' && req.method === 'POST') {
+      const { serial } = await readBody(req);
+      if (!serial) { json(res, 400, { ok: false, error: 'serial required' }, req); return true; }
+      const { out, code } = await adbCli(['-s', serial, 'root'], { timeoutMs: 15000 });
+      if (code === 0 || /already running/i.test(out)) {
+        await new Promise((r) => setTimeout(r, 2000));
+        json(res, 200, { ok: true, output: out.trim() }, req);
+      } else {
+        json(res, 200, { ok: false, output: out.trim() }, req);
+      }
+      return true;
+    }
+
+    if (path === '/__loupe/adb/reverse' && req.method === 'POST') {
+      const { serial, remote, local } = await readBody(req);
+      if (!serial) { json(res, 400, { ok: false, error: 'serial required' }, req); return true; }
+      const r = Number(remote) || 8080;
+      const l = Number(local) || r;
+      const { out, code } = await adbCli(['-s', serial, 'reverse', `tcp:${r}`, `tcp:${l}`]);
+      json(res, 200, { ok: code === 0, output: out.trim() }, req);
+      return true;
+    }
+
     json(res, 404, { ok: false, error: 'unknown adb endpoint' }, req);
     return true;
   } catch (e) {

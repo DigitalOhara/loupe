@@ -24,7 +24,6 @@ const SERVER_URL = '/scrcpy-server.bin';
 
 let session = null; // { client, decoder, controller, size, dispose }
 
-
 function makeRenderer(canvas) {
   try {
     if (WebGLVideoFrameRenderer.isSupported !== false) return new WebGLVideoFrameRenderer(canvas);
